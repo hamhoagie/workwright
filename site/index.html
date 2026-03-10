@@ -4,38 +4,42 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Workwright</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --fg: #1a1a1a;
-            --bg: #fafaf8;
-            --muted: #666;
-            --accent: #2d2d2d;
-            --rule: #ddd;
+            --fg: #000;
+            --bg: #fff;
+            --secondary: #1a1a1a;
+            --rule: #000;
         }
 
         @media (prefers-color-scheme: dark) {
             :root {
-                --fg: #e8e8e8;
-                --bg: #141414;
-                --muted: #999;
-                --accent: #d4d4d4;
-                --rule: #333;
+                --fg: #fff;
+                --bg: #0a0a0a;
+                --secondary: #e0e0e0;
+                --rule: #fff;
             }
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            font-family: "IBM Plex Sans", sans-serif;
+            font-weight: 400;
             background: var(--bg);
             color: var(--fg);
-            line-height: 1.6;
+            line-height: 1.55;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             padding: 2rem;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         .container {
@@ -44,15 +48,18 @@
         }
 
         h1 {
-            font-size: 2.5rem;
+            font-family: "IBM Plex Sans", sans-serif;
+            font-size: 2.75rem;
             font-weight: 700;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
             margin-bottom: 0.5rem;
         }
 
         .tagline {
-            font-size: 1.1rem;
-            color: var(--muted);
+            font-size: 1.125rem;
+            font-weight: 400;
+            color: var(--secondary);
             margin-bottom: 2.5rem;
         }
 
@@ -71,12 +78,14 @@
 
         .principle strong {
             display: block;
-            margin-bottom: 0.25rem;
+            font-weight: 600;
+            margin-bottom: 0.2rem;
         }
 
         .principle span {
-            color: var(--muted);
+            color: var(--secondary);
             font-size: 0.95rem;
+            line-height: 1.5;
         }
 
         .cta {
@@ -92,17 +101,18 @@
         }
 
         .cta a:hover {
-            border-color: var(--muted);
+            opacity: 0.7;
         }
 
         footer {
             margin-top: 3rem;
-            color: var(--muted);
+            color: var(--secondary);
             font-size: 0.85rem;
         }
 
         .mono {
-            font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, monospace;
+            font-family: "IBM Plex Mono", monospace;
+            font-weight: 500;
             font-size: 0.9em;
         }
     </style>
