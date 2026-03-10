@@ -70,7 +70,32 @@ A workspace where:
 └─────────────────────────────────┘
 ```
 
-## Key Concepts
+## First Principles
+
+### Unix Philosophy as Architecture
+Not a style preference — a design constraint that makes everything else work:
+- **Files** — the universal interface. Not databases, not proprietary formats.
+- **Single functions** — do one thing well. Not god-objects, not frameworks.
+- **Readable** — code is for humans to understand and machines to execute.
+- **Concise** — say what you mean, nothing more.
+
+This isn't aesthetics. It's structural. Small units are evaluable. Large ones aren't.
+
+### The Two Questions
+Every piece of work gets evaluated against:
+1. **Why are we making this?** — does it serve the purpose?
+2. **How does it solve it elegantly?** — nothing extra, nothing missing?
+
+These are the same questions a good creative director asks. They're the fitness function.
+
+### The Right-Sized Loop
+Human-in-the-loop doesn't fail because humans are slow. It fails because humans are asked to evaluate too much at once. A 47-file PR is unevaluable. Nobody has taste at that resolution.
+
+A single thing — one function, one file, one clear intent — a human can evaluate in seconds. Yes, this is right. No, this is wrong, and here's why. That's a meaningful taste signal.
+
+**The architecture produces work in units that match the grain of human judgment.**
+
+The agent does the volume. The human does the taste. But only because the work arrives in pieces small enough to taste.
 
 ### Intent, Not Diffs
 Agents declare what they're trying to accomplish, not just what they changed. Other agents (and humans) see the intent and can coordinate or redirect.
@@ -81,12 +106,11 @@ Not a style guide. Not linting rules. A model that learns from human reactions:
 - You praised this approach → the model learns
 - Over time, agents produce work that fits *your* sensibility
 
-### The V-JEPA Parallel
-Same principle as training a world model on camera feeds — build a representation of "normal" (or "good") through exposure, not explicit labels. The taste model is a V-JEPA for code quality.
+Same principle as training a world model on camera feeds (V-JEPA) — build a representation of "good" through exposure, not explicit labels. The taste model is a V-JEPA for code quality.
 
 ### Stewardship, Not Control
 The human's job:
-- Define what we're building (high-level intent)
+- Define why we're building (high-level intent)
 - React to results (taste signal)
 - Set boundaries that matter (safety, style, scope)
 - Check in when curious
