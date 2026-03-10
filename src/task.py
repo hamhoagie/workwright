@@ -30,6 +30,7 @@ class Task:
     intent: str                         # what: "add input validation to parse_date()"
     why: str                            # why: "user dates crash the pipeline"
     scope: str                          # file or function this touches
+    context: list[str] = field(default_factory=list)  # related files the wright should see
     status: TaskStatus = TaskStatus.PENDING
     agent_id: Optional[str] = None      # who's working on it
     created: float = field(default_factory=time.time)
@@ -54,13 +55,15 @@ class TaskStore:
         if not self.tasks_file.exists():
             self.tasks_file.touch()
 
-    def create(self, intent: str, why: str, scope: str) -> Task:
+    def create(self, intent: str, why: str, scope: str,
+               context: list[str] = None) -> Task:
         """Create a new task."""
         task = Task(
             id=uuid.uuid4().hex[:8],
             intent=intent,
             why=why,
             scope=scope,
+            context=context or [],
         )
         self._append(task)
         return task

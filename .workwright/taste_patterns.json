@@ -1,0 +1,12 @@
+{
+  "likes": {
+    "clean-code": 1
+  },
+  "dislikes": {
+    "general": 1
+  },
+  "principles": [
+    "Good extraction. Clean, correct imports, each command is a single function. Over the 10-function limit but that's because we have 12 commands - acceptable for a commands module. Context files made the difference."
+  ],
+  "signal_count": 2
+}
