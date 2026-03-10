@@ -160,7 +160,8 @@ def cmd_run(args):
         print(f"✅ Task {result.task_id} completed")
         print(f"   Files: {', '.join(result.files_changed)}")
         print(f"   Self-eval: {result.evaluation_score:.2f}")
-        print(f"   Changes: {', '.join(result.change_ids)}")
+        if result.defense:
+            print(f"\n   Defense: {result.defense}")
         print(f"\n   Ready for review: ww evaluate {result.task_id} <score> [reason]")
     else:
         print(f"❌ Task {result.task_id} failed: {result.message}")
@@ -176,6 +177,8 @@ def cmd_run_next(args):
         print(f"✅ Task {result.task_id} completed")
         print(f"   Files: {', '.join(result.files_changed)}")
         print(f"   Self-eval: {result.evaluation_score:.2f}")
+        if result.defense:
+            print(f"\n   Defense: {result.defense}")
         print(f"\n   Ready for review: ww evaluate {result.task_id} <score> [reason]")
     else:
         print(f"❌ Task {result.task_id} failed: {result.message}")

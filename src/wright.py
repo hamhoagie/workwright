@@ -29,6 +29,7 @@ class WorkResult:
     files_changed: list[str]
     change_ids: list[str]
     evaluation_score: float     # self-eval against principles
+    defense: str                # why the choices were made
     message: str                # what the wright did
 
 
@@ -95,7 +96,12 @@ Every piece of work must answer:
 4. Return ONLY the complete updated file content
 5. No explanations, no markdown fences, just the code
 
-Return the complete file content:"""
+## Response Format
+First: the complete file content.
+Then: a line containing only "---DEFENSE---"
+Then: your conceptual defense — why you made these specific choices.
+Not what you did (the diff shows that). Why it's right.
+Defend the form, not the function. 2-4 sentences max."""
 
 
 class Wright:
@@ -133,7 +139,7 @@ class Wright:
         except RuntimeError:
             return WorkResult(
                 task_id=task_id, success=False, files_changed=[],
-                change_ids=[], evaluation_score=0.0,
+                change_ids=[], evaluation_score=0.0, defense="",
                 message=f"Could not lock {task.scope}",
             )
 
@@ -141,8 +147,8 @@ class Wright:
         prompt = build_prompt(task, file_content, taste_guide, context)
         new_content = _call_llm(prompt)
 
-        # Clean up LLM response (strip markdown fences if present)
-        new_content = _clean_response(new_content)
+        # Parse response into code and defense
+        new_content, defense = _parse_response(new_content)
 
         # Write the file
         self.workspace.write_file(
@@ -168,6 +174,7 @@ class Wright:
             files_changed=[task.scope],
             change_ids=change_ids,
             evaluation_score=eval_result.score,
+            defense=defense,
             message=f"Completed. Self-eval: {eval_result.score:.2f}",
         )
 
@@ -179,8 +186,17 @@ class Wright:
         return self.work(pending[0].id)
 
 
-def _clean_response(text: str) -> str:
-    """Strip markdown code fences from LLM response."""
+def _parse_response(text: str) -> tuple[str, str]:
+    """Split response into code and defense."""
+    if "---DEFENSE---" in text:
+        code, defense = text.split("---DEFENSE---", 1)
+    else:
+        code, defense = text, ""
+    return _strip_fences(code.strip()), defense.strip()
+
+
+def _strip_fences(text: str) -> str:
+    """Strip markdown code fences."""
     lines = text.strip().split("\n")
     if lines and lines[0].startswith("```"):
         lines = lines[1:]
