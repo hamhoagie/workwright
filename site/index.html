@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Workwright</title>
+    <style>
+        :root {
+            --fg: #1a1a1a;
+            --bg: #fafaf8;
+            --muted: #666;
+            --accent: #2d2d2d;
+            --rule: #ddd;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --fg: #e8e8e8;
+                --bg: #141414;
+                --muted: #999;
+                --accent: #d4d4d4;
+                --rule: #333;
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.5rem;
+        }
+
+        .tagline {
+            font-size: 1.1rem;
+            color: var(--muted);
+            margin-bottom: 2.5rem;
+        }
+
+        .principles {
+            margin-bottom: 2.5rem;
+        }
+
+        .principle {
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--rule);
+        }
+
+        .principle:first-child {
+            border-top: 1px solid var(--rule);
+        }
+
+        .principle strong {
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .principle span {
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .cta {
+            margin-bottom: 2rem;
+        }
+
+        .cta a {
+            color: var(--fg);
+            text-decoration: none;
+            border-bottom: 2px solid var(--fg);
+            padding-bottom: 2px;
+            font-weight: 500;
+        }
+
+        .cta a:hover {
+            border-color: var(--muted);
+        }
+
+        footer {
+            margin-top: 3rem;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .mono {
+            font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, monospace;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Workwright</h1>
+        <p class="tagline">Humans above the loop, not in it.</p>
+
+        <div class="principles">
+            <div class="principle">
+                <strong>The Two Questions</strong>
+                <span>Why are we making this? How does it solve it elegantly?</span>
+            </div>
+            <div class="principle">
+                <strong>Taste as Gradient</strong>
+                <span>Humans don't review every diff. They shape what "good" means. The system learns.</span>
+            </div>
+            <div class="principle">
+                <strong>The Right-Sized Loop</strong>
+                <span>Human-in-the-loop fails because the loop is too big, not because humans are slow.</span>
+            </div>
+            <div class="principle">
+                <strong>Unix Philosophy</strong>
+                <span>Files do one thing. Functions do one thing. Readable. Concise. Nothing extra.</span>
+            </div>
+            <div class="principle">
+                <strong>Not Agents — Wrights</strong>
+                <span>A wright works within a craft tradition. Autonomous within the container. Stewardship, not control.</span>
+            </div>
+        </div>
+
+        <div class="cta">
+            <p><span class="mono">ww init .</span> — coming soon</p>
+        </div>
+
+        <footer>
+            <p>Built by Billy &amp; Clawdius, March 2026</p>
+        </footer>
+    </div>
+</body>
+</html>
