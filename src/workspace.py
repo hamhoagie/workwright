@@ -49,7 +49,7 @@ class Workspace:
 
     def __init__(self, root: str | Path):
         self.root = Path(root).resolve()
-        self.meta_dir = self.root / ".agenthub"
+        self.meta_dir = self.root / ".workwright"
         self.meta_dir.mkdir(parents=True, exist_ok=True)
         self._locks_file = self.meta_dir / "locks.json"
         self._changelog_file = self.meta_dir / "changelog.jsonl"

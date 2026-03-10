@@ -1,4 +1,4 @@
-# AgentHub — Agency for All Things
+# Workwright — Agency for All Things
 
 > Humans above the loop, not in it.
 
@@ -132,7 +132,7 @@ Start concrete, stay small:
 
 ## Name
 
-AgentHub is Karpathy's. We need our own.
+Workwright is Karpathy's. We need our own.
 
 Ideas:
 - **Grove** (things grow, you tend them)

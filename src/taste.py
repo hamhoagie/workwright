@@ -36,8 +36,8 @@ class TasteStore:
 
     def __init__(self, workspace_root: str | Path):
         self.root = Path(workspace_root).resolve()
-        self.signals_file = self.root / ".agenthub" / "taste.jsonl"
-        self.patterns_file = self.root / ".agenthub" / "taste_patterns.json"
+        self.signals_file = self.root / ".workwright" / "taste.jsonl"
+        self.patterns_file = self.root / ".workwright" / "taste_patterns.json"
         self.signals_file.parent.mkdir(parents=True, exist_ok=True)
         if not self.signals_file.exists():
             self.signals_file.touch()

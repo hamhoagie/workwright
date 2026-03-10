@@ -49,7 +49,7 @@ class TaskStore:
 
     def __init__(self, workspace_root: str | Path):
         self.root = Path(workspace_root).resolve()
-        self.tasks_file = self.root / ".agenthub" / "tasks.jsonl"
+        self.tasks_file = self.root / ".workwright" / "tasks.jsonl"
         self.tasks_file.parent.mkdir(parents=True, exist_ok=True)
         if not self.tasks_file.exists():
             self.tasks_file.touch()

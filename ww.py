@@ -33,7 +33,7 @@ def cmd_init(args):
     TaskStore(args.path)
     TasteStore(args.path)
     print(f"Initialized workspace at {args.path}")
-    print(f"  .agenthub/ created with locks, changelog, tasks, taste stores")
+    print(f"  .workwright/ created with locks, changelog, tasks, taste stores")
 
 
 def cmd_task(args):
@@ -176,7 +176,7 @@ def cmd_status(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="hub",
+        prog="ww",
         description="Agency for all things. Humans above the loop.",
     )
     parser.add_argument("--path", default=".", help="Workspace path")
