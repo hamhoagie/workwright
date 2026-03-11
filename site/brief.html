@@ -237,8 +237,20 @@
             }
         }
 
+        function getToken() {
+            let token = localStorage.getItem('ww_token');
+            if (!token) {
+                token = prompt('Enter your access token:');
+                if (token) localStorage.setItem('ww_token', token);
+            }
+            return token;
+        }
+
         document.getElementById('brief-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const token = getToken();
+            if (!token) return;
+
             const intent = document.getElementById('intent').value;
             const why = document.getElementById('why').value;
             const scopeType = document.getElementById('scope-value').value;
@@ -247,9 +259,17 @@
             try {
                 const res = await fetch(`${API}/tasks`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
                     body: JSON.stringify({ intent, why, scope })
                 });
+                if (res.status === 401) {
+                    localStorage.removeItem('ww_token');
+                    alert('Invalid token. Try again.');
+                    return;
+                }
                 if (res.ok) {
                     document.getElementById('intent').value = '';
                     document.getElementById('why').value = '';

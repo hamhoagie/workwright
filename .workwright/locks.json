@@ -1,1 +1,9 @@
-{}
+{
+  "site/index.html": {
+    "path": "site/index.html",
+    "agent_id": "wright-1",
+    "intent": "auth test - delete me",
+    "acquired": 1773192026.9581957,
+    "expires": 1773192326.958196
+  }
+}

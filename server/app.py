@@ -8,9 +8,13 @@ import json
 import os
 import time
 import hashlib
+import hmac
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
+
+# Auth token for write operations (brief + crit)
+SUBMIT_TOKEN = os.environ.get("WW_SUBMIT_TOKEN", "")
 
 # Workspace root — the workwright project itself
 ROOT = Path(__file__).resolve().parent.parent
@@ -100,8 +104,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
+
+    def _check_auth(self):
+        """Verify bearer token for write operations."""
+        if not SUBMIT_TOKEN:
+            return True  # no token configured = open
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            return hmac.compare_digest(auth[7:], SUBMIT_TOKEN)
+        return False
 
     def do_OPTIONS(self):
         self._cors()
@@ -178,6 +191,8 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"error": "change not found"}, 404)
 
     def _post_task(self):
+        if not self._check_auth():
+            return self._json({"error": "unauthorized"}, 401)
         if not _check_rate(_rate_key(self)):
             return self._json({"error": "rate limited"}, 429)
 
@@ -208,6 +223,8 @@ class Handler(BaseHTTPRequestHandler):
         self._json(_task_json(task), 201)
 
     def _post_crit(self):
+        if not self._check_auth():
+            return self._json({"error": "unauthorized"}, 401)
         if not _check_rate(_rate_key(self)):
             return self._json({"error": "rate limited"}, 429)
 

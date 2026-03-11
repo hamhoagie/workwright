@@ -660,14 +660,33 @@
             panel.classList.toggle('open');
         }
 
+        function getToken() {
+            let token = localStorage.getItem('ww_token');
+            if (!token) {
+                token = prompt('Enter your access token:');
+                if (token) localStorage.setItem('ww_token', token);
+            }
+            return token;
+        }
+
         async function submitCrit(taskId, score) {
+            const token = getToken();
+            if (!token) return;
             const reason = document.getElementById(`crit-reason-${taskId}`).value;
             try {
-                await fetch(`${API}/crit`, {
+                const res = await fetch(`${API}/crit`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
                     body: JSON.stringify({ task_id: taskId, score, reason })
                 });
+                if (res.status === 401) {
+                    localStorage.removeItem('ww_token');
+                    alert('Invalid token. Try again.');
+                    return;
+                }
                 loadFeed();
             } catch (e) {
                 console.error('API not available');
