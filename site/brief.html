@@ -213,6 +213,25 @@
             ✓ Brief submitted. A wright will pick it up. Watch the <a href="/" style="color: var(--fg); border-bottom: 1px solid var(--fg);">feed</a> for the defense.
         </div>
 
+        <hr style="border: none; border-top: 2px solid var(--rule); margin: 2.5rem 0;">
+
+        <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">Register</h2>
+        <p style="color: var(--secondary); margin-bottom: 1.25rem; font-size: 0.95rem;">
+            Need an access token? Register to get one. Tokens let you submit briefs and track your work.
+        </p>
+        <form id="register-form">
+            <div class="field">
+                <label>Email</label>
+                <input type="email" id="reg-email" placeholder="you@example.com" required>
+            </div>
+            <div class="field">
+                <label>Display Name</label>
+                <input type="text" id="reg-name" placeholder="your name or handle" required>
+            </div>
+            <button type="submit" class="submit">Register</button>
+        </form>
+        <div class="confirmation" id="reg-confirmation" style="margin-top: 1rem;"></div>
+
         <footer>
             <span>Brief → Defense → Crit</span>
         </footer>
@@ -245,6 +264,31 @@
             }
             return token;
         }
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('reg-email').value;
+            const display_name = document.getElementById('reg-name').value;
+            try {
+                const res = await fetch(`${API}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, display_name })
+                });
+                const data = await res.json();
+                const conf = document.getElementById('reg-confirmation');
+                if (res.ok) {
+                    localStorage.setItem('ww_token', data.token);
+                    conf.style.display = 'block';
+                    conf.innerHTML = `✓ Registered as <strong>${display_name}</strong>. Your token has been saved locally.<br><code style="font-size:0.8rem; word-break:break-all;">${data.token}</code>`;
+                } else {
+                    conf.style.display = 'block';
+                    conf.textContent = `Error: ${data.error}`;
+                }
+            } catch (err) {
+                console.error('Register failed', err);
+            }
+        });
 
         document.getElementById('brief-form').addEventListener('submit', async (e) => {
             e.preventDefault();

@@ -1,7 +1,7 @@
 """
 Workwright API — serves the live workspace.
 
-Four endpoints. Nothing extra.
+Four endpoints. Nothing extra. Now with multi-user identity.
 """
 
 import json
@@ -14,6 +14,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
 # Auth token for write operations (brief + crit)
+# Still used as the admin's token for backward compatibility (via seed)
 SUBMIT_TOKEN = os.environ.get("WW_SUBMIT_TOKEN", "")
 
 # Workspace root — the workwright project itself
@@ -28,10 +29,12 @@ from src.workspace import Workspace
 from src.task import TaskStore, TaskStatus
 from src.taste import TasteStore
 from src.wright import Wright
+from src.users import UserStore, User
 
 
 store_tasks = TaskStore(ROOT)
 store_taste = TasteStore(ROOT)
+store_users = UserStore(ROOT)
 
 
 def _task_json(t):
@@ -48,6 +51,10 @@ def _task_json(t):
         "change_ids": t.change_ids,
         "taste_score": t.taste_score,
         "taste_note": t.taste_note,
+        "submitted_by": t.submitted_by,
+        "submitted_by_name": t.submitted_by_name,
+        "critted_by": t.critted_by,
+        "critted_by_name": t.critted_by_name,
     }
 
 
@@ -58,8 +65,8 @@ def _read_body(handler):
     return json.loads(raw) if raw else {}
 
 
-def _rate_key(handler):
-    """Rate limit key from IP."""
+def _ip(handler):
+    """Client IP, respecting X-Forwarded-For."""
     addr = handler.client_address[0]
     forwarded = handler.headers.get("X-Forwarded-For")
     if forwarded:
@@ -67,22 +74,32 @@ def _rate_key(handler):
     return addr
 
 
-# Simple in-memory rate limiter
-_rate_counts = {}  # ip -> (count, window_start)
-RATE_LIMIT = 10     # tasks per window
+# ---- Rate limiters ----
+# Keyed by (kind, key) -> (count, window_start)
+_rate_counts = {}
+
 RATE_WINDOW = 3600  # 1 hour
 
+_RATE_LIMITS = {
+    "submit_ip": 10,      # task submissions per IP per hour
+    "wright_user": 5,     # wright runs per non-admin user per hour
+    "register_ip": 3,     # registrations per IP per hour
+}
 
-def _check_rate(ip):
-    """Return True if allowed."""
+
+def _check_rate(kind: str, key: str, limit: int = None) -> bool:
+    """Return True if allowed. Uses _RATE_LIMITS[kind] unless limit is given."""
+    if limit is None:
+        limit = _RATE_LIMITS.get(kind, 10)
     now = time.time()
-    count, start = _rate_counts.get(ip, (0, now))
+    bucket = (kind, key)
+    count, start = _rate_counts.get(bucket, (0, now))
     if now - start > RATE_WINDOW:
-        _rate_counts[ip] = (1, now)
+        _rate_counts[bucket] = (1, now)
         return True
-    if count >= RATE_LIMIT:
+    if count >= limit:
         return False
-    _rate_counts[ip] = (count + 1, start)
+    _rate_counts[bucket] = (count + 1, start)
     return True
 
 
@@ -107,13 +124,39 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
 
-    def _check_auth(self):
-        """Verify bearer token for write operations."""
-        if not SUBMIT_TOKEN:
-            return True  # no token configured = open
+    def _get_token(self) -> str:
+        """Extract bearer token from Authorization header."""
         auth = self.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
-            return hmac.compare_digest(auth[7:], SUBMIT_TOKEN)
+            return auth[7:].strip()
+        return ""
+
+    def _check_auth(self) -> bool:
+        """
+        Verify bearer token. Returns True if authed.
+        Attaches resolved User to self._user (None if unauthenticated).
+        """
+        self._user = None
+        token = self._get_token()
+
+        if not token:
+            # No token at all — only allowed if no SUBMIT_TOKEN configured
+            return not SUBMIT_TOKEN
+
+        # Resolve token to user
+        user = store_users.get_by_token(token)
+        if user:
+            self._user = user
+            return True
+
+        # Backward compat: raw SUBMIT_TOKEN still works (maps to admin)
+        if SUBMIT_TOKEN and hmac.compare_digest(token, SUBMIT_TOKEN):
+            # Find the admin user (seeded with this token)
+            user = store_users.get_by_token(token)
+            if user:
+                self._user = user
+            return True
+
         return False
 
     def do_OPTIONS(self):
@@ -124,6 +167,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._get_tasks()
         if self.path == "/api/taste":
             return self._get_taste()
+        if self.path == "/api/users":
+            return self._get_users()
+        if self.path == "/api/me":
+            return self._get_me()
         if self.path.startswith("/api/preview/"):
             return self._get_preview(self.path.split("/")[-1])
         if self.path.startswith("/api/changes/"):
@@ -135,6 +182,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._post_task()
         if self.path == "/api/crit":
             return self._post_crit()
+        if self.path == "/api/register":
+            return self._post_register()
         self._json({"error": "not found"}, 404)
 
     def _get_tasks(self):
@@ -151,6 +200,17 @@ class Handler(BaseHTTPRequestHandler):
             "likes": patterns.get("likes", {}),
             "dislikes": patterns.get("dislikes", {}),
         })
+
+    def _get_users(self):
+        """Public list of participants (no tokens, no emails)."""
+        users = store_users.all()
+        self._json([u.public_dict() for u in users])
+
+    def _get_me(self):
+        """Own profile — requires auth."""
+        if not self._check_auth() or not self._user:
+            return self._json({"error": "unauthorized"}, 401)
+        self._json(self._user.profile_dict())
 
     def _get_preview(self, change_id):
         """Serve the proposed file as a rendered HTML page."""
@@ -173,7 +233,6 @@ class Handler(BaseHTTPRequestHandler):
         changes = ws.recent_changes(limit=100)
         for c in changes:
             if c.id == change_id:
-                # Read the file at its current state
                 content = None
                 filepath = ROOT / c.path
                 if filepath.exists():
@@ -190,11 +249,44 @@ class Handler(BaseHTTPRequestHandler):
                 })
         self._json({"error": "change not found"}, 404)
 
+    def _post_register(self):
+        """Register a new participant. Rate limited per IP."""
+        ip = _ip(self)
+        if not _check_rate("register_ip", ip):
+            return self._json({"error": "rate limited"}, 429)
+
+        body = _read_body(self)
+        email = body.get("email", "").strip()
+        display_name = body.get("display_name", "").strip()
+
+        if not email or not display_name:
+            return self._json({"error": "email and display_name required"}, 400)
+        if len(email) > 200 or len(display_name) > 60:
+            return self._json({"error": "too long"}, 400)
+
+        try:
+            user = store_users.register(email, display_name)
+        except ValueError as e:
+            return self._json({"error": str(e)}, 409)
+
+        self._json({
+            "user_id": user.id,
+            "token": user.token,
+            "display_name": user.display_name,
+            "trust_score": user.trust_score,
+        }, 201)
+
     def _post_task(self):
         if not self._check_auth():
             return self._json({"error": "unauthorized"}, 401)
-        if not _check_rate(_rate_key(self)):
+        ip = _ip(self)
+        if not _check_rate("submit_ip", ip):
             return self._json({"error": "rate limited"}, 429)
+
+        # Rate limit wright runs for non-admin users
+        if self._user and not self._user.is_admin():
+            if not _check_rate("wright_user", self._user.id):
+                return self._json({"error": "wright rate limit: 5 per hour"}, 429)
 
         body = _read_body(self)
         intent = body.get("intent", "").strip()
@@ -213,11 +305,16 @@ class Handler(BaseHTTPRequestHandler):
         task = store_tasks.create(
             intent=intent,
             why=why,
-            scope=scope,              # keep :design tag
-            context=[file_path],       # clean path for file ops
+            scope=scope,
+            context=[file_path],
         )
 
-        # Wright works on it in background
+        # Tag with submitter identity
+        if self._user:
+            task.submitted_by = self._user.id
+            task.submitted_by_name = self._user.display_name
+            store_tasks._update(task)
+
         _run_wright_async(task.id)
 
         self._json(_task_json(task), 201)
@@ -225,7 +322,13 @@ class Handler(BaseHTTPRequestHandler):
     def _post_crit(self):
         if not self._check_auth():
             return self._json({"error": "unauthorized"}, 401)
-        if not _check_rate(_rate_key(self)):
+
+        # Only admins can crit (for now)
+        if self._user and not self._user.is_admin():
+            return self._json({"error": "only admins can crit"}, 403)
+
+        ip = _ip(self)
+        if not _check_rate("submit_ip", ip):
             return self._json({"error": "rate limited"}, 429)
 
         body = _read_body(self)
@@ -242,13 +345,33 @@ class Handler(BaseHTTPRequestHandler):
 
         score = max(-1.0, min(1.0, float(score)))
 
+        # Tag critter
+        if self._user:
+            task.critted_by = self._user.id
+            task.critted_by_name = self._user.display_name
+
         store_tasks.evaluate(task_id, score, reason)
+        # Re-fetch to get updated state, then re-apply critter tag
+        task = store_tasks.get(task_id)
+        if self._user:
+            task.critted_by = self._user.id
+            task.critted_by_name = self._user.display_name
+            store_tasks._update(task)
+
         store_taste.record(
             score=score,
             reason=reason,
             task_id=task_id,
             change_id=task.change_ids[0] if task.change_ids else None,
         )
+
+        # Trust score flows from crit to submitter
+        if task.submitted_by:
+            delta = score * 0.1
+            try:
+                store_users.update_trust(task.submitted_by, delta)
+            except ValueError:
+                pass  # submitter no longer exists
 
         # If accepted, deploy
         if score > 0:

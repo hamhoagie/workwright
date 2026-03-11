@@ -2,6 +2,7 @@
 commands — one function per CLI verb.
 """
 
+import os
 import sys
 
 from src.workspace import Workspace
@@ -9,6 +10,7 @@ from src.task import TaskStore, TaskStatus
 from src.evaluate import evaluate_file
 from src.taste import TasteStore
 from src.wright import Wright
+from src.users import UserStore
 
 
 def cmd_init(args):
@@ -182,3 +184,49 @@ def cmd_run_next(args):
         print(f"\n   Ready for review: ww evaluate {result.task_id} <score> [reason]")
     else:
         print(f"❌ Task {result.task_id} failed: {result.message}")
+
+
+def cmd_register(args):
+    """Register a new participant and print their token."""
+    store = UserStore(args.path)
+    try:
+        user = store.register(args.email, args.display_name)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    print(f"Registered: {user.display_name} ({user.email})")
+    print(f"  ID:    {user.id}")
+    print(f"  Token: {user.token}")
+    print(f"\nSet WW_TOKEN={user.token} to use this token with ww me")
+
+
+def cmd_users(args):
+    """List all participants with trust scores."""
+    store = UserStore(args.path)
+    users = store.all()
+    if not users:
+        print("No users.")
+        return
+    print(f"{'NAME':<20} {'ROLE':<12} {'TRUST':>6}  {'ID'}")
+    print("-" * 50)
+    for u in users:
+        bar = "█" * int(u.trust_score * 10) + "░" * (10 - int(u.trust_score * 10))
+        print(f"  {u.display_name:<18} {u.role.value:<12} {u.trust_score:>5.2f}  {u.id}  {bar}")
+
+
+def cmd_me(args):
+    """Show own profile (requires WW_TOKEN env var)."""
+    token = os.environ.get("WW_TOKEN", "")
+    if not token:
+        print("WW_TOKEN not set. Export your token: export WW_TOKEN=<your-token>")
+        sys.exit(1)
+    store = UserStore(args.path)
+    user = store.get_by_token(token)
+    if not user:
+        print("Token not recognized.")
+        sys.exit(1)
+    print(f"Name:        {user.display_name}")
+    print(f"Email:       {user.email}")
+    print(f"ID:          {user.id}")
+    print(f"Role:        {user.role.value}")
+    print(f"Trust score: {user.trust_score:.2f}")

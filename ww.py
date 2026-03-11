@@ -9,7 +9,7 @@ import argparse
 from src.commands import (
     cmd_init, cmd_task, cmd_tasks, cmd_review, cmd_evaluate,
     cmd_taste, cmd_eval_file, cmd_changes, cmd_locks, cmd_status,
-    cmd_run, cmd_run_next,
+    cmd_run, cmd_run_next, cmd_register, cmd_users, cmd_me,
 )
 
 
@@ -79,6 +79,20 @@ def main():
     # run-next
     p = sub.add_parser("run-next", help="Wright picks up next pending task")
     p.set_defaults(func=cmd_run_next)
+
+    # register
+    p = sub.add_parser("register", help="Register a new participant")
+    p.add_argument("email", help="Email address")
+    p.add_argument("display_name", help="Display name")
+    p.set_defaults(func=cmd_register)
+
+    # users
+    p = sub.add_parser("users", help="List participants and trust scores")
+    p.set_defaults(func=cmd_users)
+
+    # me
+    p = sub.add_parser("me", help="Show own profile (requires WW_TOKEN env var)")
+    p.set_defaults(func=cmd_me)
 
     args = parser.parse_args()
     args.func(args)

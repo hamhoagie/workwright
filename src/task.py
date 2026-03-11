@@ -40,6 +40,10 @@ class Task:
     defense: Optional[str] = None          # why the wright made these choices
     taste_score: Optional[float] = None
     taste_note: Optional[str] = None
+    submitted_by: Optional[str] = None     # user_id of submitter
+    submitted_by_name: Optional[str] = None
+    critted_by: Optional[str] = None       # user_id of critter
+    critted_by_name: Optional[str] = None
 
 
 class TaskStore:
