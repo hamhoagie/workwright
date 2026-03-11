@@ -744,10 +744,42 @@
             try {
                 const res = await fetch(`${API}/taste`);
                 if (!res.ok) return;
-                const guide = await res.json();
-                if (guide.text) {
-                    document.getElementById('taste-guide').innerHTML = guide.text;
+                const data = await res.json();
+                const el = document.getElementById('taste-guide');
+
+                if (!data.signal_count) {
+                    el.innerHTML = '<p>No signals yet. Crit a task to teach the system what you value.</p>';
+                    return;
                 }
+
+                let html = `<h3>${data.signal_count} signal${data.signal_count !== 1 ? 's' : ''} accumulated</h3>`;
+
+                const likes = Object.entries(data.likes || {});
+                const dislikes = Object.entries(data.dislikes || {});
+
+                if (likes.length) {
+                    html += '<h3>Valued</h3><ul>';
+                    likes.forEach(([k, v]) => { html += `<li>${esc(k)} (${v}×)</li>`; });
+                    html += '</ul>';
+                }
+                if (dislikes.length) {
+                    html += '<h3>Rejected</h3><ul>';
+                    dislikes.forEach(([k, v]) => { html += `<li>${esc(k)} (${v}×)</li>`; });
+                    html += '</ul>';
+                }
+
+                if (data.text && data.text.includes('principles')) {
+                    const principles = data.text.split('Extracted principles:')[1];
+                    if (principles) {
+                        html += '<h3>Principles</h3><ul>';
+                        principles.split('\n').filter(l => l.trim().startsWith('-')).forEach(l => {
+                            html += `<li>${esc(l.trim().slice(2))}</li>`;
+                        });
+                        html += '</ul>';
+                    }
+                }
+
+                el.innerHTML = html;
             } catch (e) { }
         }
 

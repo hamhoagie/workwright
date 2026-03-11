@@ -131,7 +131,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def _get_taste(self):
         guide = store_taste.guide()
-        self._json({"text": guide})
+        patterns = store_taste.patterns()
+        self._json({
+            "text": guide,
+            "signal_count": patterns.get("signal_count", 0),
+            "likes": patterns.get("likes", {}),
+            "dislikes": patterns.get("dislikes", {}),
+        })
 
     def _get_preview(self, change_id):
         """Serve the proposed file as a rendered HTML page."""

@@ -97,7 +97,7 @@ class TasteStore:
     def guide(self) -> str:
         """Generate natural language taste guide for wrights."""
         p = self.patterns()
-        if p["signal_count"] < 3:
+        if p["signal_count"] < 2:
             return "Not enough taste data yet. Follow Unix principles: single responsibility, readable, concise."
         parts = ["## Taste Guide (learned from human feedback)\n"]
         parts.append(_format_tags("This human values:", p.get("likes", {})))
