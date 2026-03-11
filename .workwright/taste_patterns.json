@@ -1,14 +1,15 @@
 {
   "likes": {
-    "clean-code": 1,
-    "general": 1
+    "general": 2,
+    "clean-code": 1
   },
   "dislikes": {
     "general": 1
   },
   "principles": [
     "Good extraction. Clean, correct imports, each command is a single function. Over the 10-function limit but that's because we have 12 commands - acceptable for a commands module. Context files made the difference.",
-    "Defense is right \u2014 nav consistency is about trust. But the wright could only touch one file. The actual fix required editing about.html too. Highlights a limitation: multi-file briefs need multi-file scope."
+    "Defense is right \u2014 nav consistency is about trust. But the wright could only touch one file. The actual fix required editing about.html too. Highlights a limitation: multi-file briefs need multi-file scope.",
+    "Best defense yet. The wright recognized that executing the brief would cause the exact failure the brief describes. Refusing to clobber the file IS the correct implementation of the trust gradient. The architectural fix belongs in wright.py and server/app.py, not the page."
   ],
-  "signal_count": 3
+  "signal_count": 4
 }
