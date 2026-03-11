@@ -111,6 +111,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._get_tasks()
         if self.path == "/api/taste":
             return self._get_taste()
+        if self.path.startswith("/api/preview/"):
+            return self._get_preview(self.path.split("/")[-1])
         if self.path.startswith("/api/changes/"):
             return self._get_change(self.path.split("/")[-1])
         return self._serve_static()
@@ -130,6 +132,22 @@ class Handler(BaseHTTPRequestHandler):
     def _get_taste(self):
         guide = store_taste.guide()
         self._json({"text": guide})
+
+    def _get_preview(self, change_id):
+        """Serve the proposed file as a rendered HTML page."""
+        ws = Workspace(ROOT)
+        changes = ws.recent_changes(limit=100)
+        for c in changes:
+            if c.id == change_id:
+                filepath = ROOT / c.path
+                if filepath.exists() and c.path.endswith(".html"):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(filepath.read_bytes())
+                    return
+        self._json({"error": "preview not available"}, 404)
 
     def _get_change(self, change_id):
         ws = Workspace(ROOT)
