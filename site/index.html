@@ -321,6 +321,48 @@
             color: var(--bg);
         }
 
+        /* ---- SCOPE TOGGLE ---- */
+
+        .scope-toggle {
+            display: flex;
+            gap: 0;
+        }
+
+        .scope-btn {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 0.5rem 1.25rem;
+            border: 2px solid var(--rule);
+            background: var(--bg);
+            color: var(--fg);
+            cursor: pointer;
+        }
+
+        .scope-btn:first-child {
+            border-right: none;
+        }
+
+        .scope-btn.active {
+            background: var(--fg);
+            color: var(--bg);
+        }
+
+        .scope-btn:hover:not(.active) {
+            opacity: 0.7;
+        }
+
+        .feed-scope-tag {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.15em 0.4em;
+            border: 1px solid var(--fg);
+            display: inline-block;
+        }
+
         /* ---- PRINCIPLES ---- */
 
         .principles {
@@ -417,6 +459,13 @@
             </p>
             <form class="propose-form" id="propose-form">
                 <div class="field">
+                    <label>Scope</label>
+                    <div class="scope-toggle" id="scope-toggle">
+                        <button type="button" class="scope-btn active" data-scope="code" onclick="setScope(this)">Code</button>
+                        <button type="button" class="scope-btn" data-scope="design" onclick="setScope(this)">Design</button>
+                    </div>
+                </div>
+                <div class="field">
                     <label>What</label>
                     <input type="text" id="intent" placeholder="add a dark mode toggle to the header" required>
                 </div>
@@ -424,6 +473,7 @@
                     <label>Why</label>
                     <textarea id="why" placeholder="users should control their own reading experience rather than deferring to OS preference" required></textarea>
                 </div>
+                <input type="hidden" id="scope-value" value="code">
                 <button type="submit" class="submit">Submit Task</button>
             </form>
         </section>
@@ -499,6 +549,7 @@
                     <div class="feed-meta">
                         <span class="feed-status ${t.status}"></span>
                         <span>${t.id}</span>
+                        <span class="feed-scope-tag">${t.scope && t.scope.includes(':design') ? 'design' : 'code'}</span>
                         <span>${t.status}</span>
                         <span>${timeAgo(t.created)}</span>
                         <span class="feed-expand-hint">click to expand</span>
@@ -559,16 +610,34 @@
 
         // ---- Propose ----
 
+        function setScope(btn) {
+            document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('scope-value').value = btn.dataset.scope;
+
+            const intentInput = document.getElementById('intent');
+            const whyInput = document.getElementById('why');
+            if (btn.dataset.scope === 'design') {
+                intentInput.placeholder = 'increase heading weight to 800 for stronger visual hierarchy';
+                whyInput.placeholder = 'the current 700 weight doesn\'t create enough separation from the body — the page reads flat';
+            } else {
+                intentInput.placeholder = 'add a dark mode toggle to the header';
+                whyInput.placeholder = 'users should control their own reading experience rather than deferring to OS preference';
+            }
+        }
+
         document.getElementById('propose-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const intent = document.getElementById('intent').value;
             const why = document.getElementById('why').value;
+            const scopeType = document.getElementById('scope-value').value;
+            const scope = scopeType === 'design' ? 'site/index.html:design' : 'site/index.html';
 
             try {
                 const res = await fetch(`${API}/tasks`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ intent, why, scope: 'site/index.html' })
+                    body: JSON.stringify({ intent, why, scope })
                 });
 
                 if (res.ok) {
