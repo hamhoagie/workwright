@@ -1,7 +1,8 @@
 {
   "likes": {
     "general": 3,
-    "clean-code": 2
+    "clean-code": 2,
+    "simplicity": 1
   },
   "dislikes": {
     "general": 1
@@ -11,7 +12,8 @@
     "Defense is right \u2014 nav consistency is about trust. But the wright could only touch one file. The actual fix required editing about.html too. Highlights a limitation: multi-file briefs need multi-file scope.",
     "Best defense yet. The wright recognized that executing the brief would cause the exact failure the brief describes. Refusing to clobber the file IS the correct implementation of the trust gradient. The architectural fix belongs in wright.py and server/app.py, not the page.",
     "Clean separation. Feed is read, brief is write, about is learn. Each page has one job.",
-    "Correct fix. Background must fill viewport. Applied to brief and about pages."
+    "Correct fix. Background must fill viewport. Applied to brief and about pages.",
+    "Right architecture. Public read, gated write. Simplest auth that works. No OAuth theater."
   ],
-  "signal_count": 6
+  "signal_count": 7
 }
