@@ -1,12 +1,14 @@
 {
   "likes": {
-    "clean-code": 1
+    "clean-code": 1,
+    "general": 1
   },
   "dislikes": {
     "general": 1
   },
   "principles": [
-    "Good extraction. Clean, correct imports, each command is a single function. Over the 10-function limit but that's because we have 12 commands - acceptable for a commands module. Context files made the difference."
+    "Good extraction. Clean, correct imports, each command is a single function. Over the 10-function limit but that's because we have 12 commands - acceptable for a commands module. Context files made the difference.",
+    "Defense is right \u2014 nav consistency is about trust. But the wright could only touch one file. The actual fix required editing about.html too. Highlights a limitation: multi-file briefs need multi-file scope."
   ],
-  "signal_count": 2
+  "signal_count": 3
 }
