@@ -160,6 +160,37 @@
         .feed-score .positive { color: var(--accept); }
         .feed-score .negative { color: var(--reject); }
 
+        .feed-item { cursor: pointer; }
+
+        .feed-detail {
+            display: none;
+            margin-top: 0.75rem;
+        }
+
+        .feed-item.expanded .feed-detail {
+            display: block;
+        }
+
+        .feed-diff {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            padding: 1rem;
+            background: var(--code-bg);
+            margin-bottom: 0.75rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .feed-expand-hint {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.75rem;
+            color: var(--secondary);
+            opacity: 0.6;
+        }
+
         /* ---- PROPOSE FORM ---- */
 
         .propose-form {
@@ -449,34 +480,45 @@
             }
 
             feed.innerHTML = tasks.map(t => `
-                <div class="feed-item" data-id="${t.id}">
+                <div class="feed-item" data-id="${t.id}" onclick="toggleExpand(this, event)">
                     <div class="feed-meta">
                         <span class="feed-status ${t.status}"></span>
                         <span>${t.id}</span>
                         <span>${t.status}</span>
                         <span>${timeAgo(t.created)}</span>
+                        <span class="feed-expand-hint">click to expand</span>
                     </div>
                     <div class="feed-intent">${esc(t.intent)}</div>
-                    <div class="feed-why">${esc(t.why)}</div>
-                    ${t.defense ? `<div class="feed-defense">${esc(t.defense)}</div>` : ''}
-                    ${t.taste_score !== null ? `
-                        <div class="feed-score">
-                            Score: <span class="${t.taste_score > 0 ? 'positive' : 'negative'}">${t.taste_score > 0 ? '+' : ''}${t.taste_score.toFixed(1)}</span>
-                            ${t.taste_note ? ` — ${esc(t.taste_note)}` : ''}
-                        </div>
-                    ` : ''}
-                    ${t.status === 'review' ? `
-                        <button class="crit-btn" onclick="openCrit('${t.id}')">Crit This</button>
-                        <div class="crit-panel" id="crit-${t.id}">
-                            <div class="crit-actions">
-                                <input type="text" id="crit-reason-${t.id}" placeholder="why (the reason matters more than the score)">
-                                <button class="crit-btn" onclick="submitCrit('${t.id}', 0.8)">Accept</button>
-                                <button class="crit-btn" onclick="submitCrit('${t.id}', -0.8)">Reject</button>
+
+                    <div class="feed-detail">
+                        <div class="feed-why">${esc(t.why)}</div>
+                        ${t.defense ? `<div class="feed-defense">${esc(t.defense)}</div>` : ''}
+                        ${t.taste_score !== null ? `
+                            <div class="feed-score">
+                                Score: <span class="${t.taste_score > 0 ? 'positive' : 'negative'}">${t.taste_score > 0 ? '+' : ''}${t.taste_score.toFixed(1)}</span>
+                                ${t.taste_note ? `<br>${esc(t.taste_note)}` : ''}
                             </div>
-                        </div>
-                    ` : ''}
+                        ` : ''}
+                        ${t.status === 'review' ? `
+                            <button class="crit-btn" onclick="openCrit('${t.id}')">Crit This</button>
+                            <div class="crit-panel" id="crit-${t.id}">
+                                <div class="crit-actions">
+                                    <input type="text" id="crit-reason-${t.id}" placeholder="why (the reason matters more than the score)" onclick="event.stopPropagation()">
+                                    <button class="crit-btn" onclick="event.stopPropagation(); submitCrit('${t.id}', 0.8)">Accept</button>
+                                    <button class="crit-btn" onclick="event.stopPropagation(); submitCrit('${t.id}', -0.8)">Reject</button>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
             `).join('');
+        }
+
+        function toggleExpand(el, e) {
+            if (e.target.closest('.crit-panel') || e.target.closest('.crit-btn')) return;
+            el.classList.toggle('expanded');
+            const hint = el.querySelector('.feed-expand-hint');
+            if (hint) hint.textContent = el.classList.contains('expanded') ? 'click to collapse' : 'click to expand';
         }
 
         // ---- Propose ----
