@@ -20,6 +20,7 @@ SITE = ROOT / "site"
 import sys
 sys.path.insert(0, str(ROOT))
 
+from src.workspace import Workspace
 from src.task import TaskStore, TaskStatus
 from src.taste import TasteStore
 from src.wright import Wright
@@ -40,6 +41,7 @@ def _task_json(t):
         "created": t.created,
         "agent_id": t.agent_id,
         "defense": t.defense,
+        "change_ids": t.change_ids,
         "taste_score": t.taste_score,
         "taste_note": t.taste_note,
     }
@@ -109,6 +111,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._get_tasks()
         if self.path == "/api/taste":
             return self._get_taste()
+        if self.path.startswith("/api/changes/"):
+            return self._get_change(self.path.split("/")[-1])
         return self._serve_static()
 
     def do_POST(self):
@@ -126,6 +130,28 @@ class Handler(BaseHTTPRequestHandler):
     def _get_taste(self):
         guide = store_taste.guide()
         self._json({"text": guide})
+
+    def _get_change(self, change_id):
+        ws = Workspace(ROOT)
+        changes = ws.recent_changes(limit=100)
+        for c in changes:
+            if c.id == change_id:
+                # Read the file at its current state
+                content = None
+                filepath = ROOT / c.path
+                if filepath.exists():
+                    try:
+                        content = filepath.read_text()
+                    except Exception:
+                        content = "(binary file)"
+                return self._json({
+                    "id": c.id,
+                    "path": c.path,
+                    "intent": c.intent,
+                    "agent_id": c.agent_id,
+                    "content": content,
+                })
+        self._json({"error": "change not found"}, 404)
 
     def _post_task(self):
         if not _check_rate(_rate_key(self)):

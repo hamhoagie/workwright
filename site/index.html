@@ -514,8 +514,13 @@
                                 ${t.taste_note ? `<br>${esc(t.taste_note)}` : ''}
                             </div>
                         ` : ''}
+                        ${t.change_ids && t.change_ids.length ? `
+                            <div class="feed-code" id="code-${t.id}">
+                                <button class="crit-btn" onclick="event.stopPropagation(); loadCode('${t.id}', '${t.change_ids[0]}')">View Code →</button>
+                            </div>
+                        ` : ''}
                         ${t.status === 'review' ? `
-                            <button class="crit-btn" onclick="openCrit('${t.id}')">Crit This</button>
+                            <button class="crit-btn" onclick="event.stopPropagation(); openCrit('${t.id}')">Crit This</button>
                             <div class="crit-panel" id="crit-${t.id}">
                                 <div class="crit-actions">
                                     <input type="text" id="crit-reason-${t.id}" placeholder="why (the reason matters more than the score)" onclick="event.stopPropagation()">
@@ -530,10 +535,26 @@
         }
 
         function toggleExpand(el, e) {
-            if (e.target.closest('.crit-panel') || e.target.closest('.crit-btn')) return;
+            if (e.target.closest('.crit-panel') || e.target.closest('.crit-btn') || e.target.closest('.feed-code')) return;
             el.classList.toggle('expanded');
             const hint = el.querySelector('.feed-expand-hint');
             if (hint) hint.textContent = el.classList.contains('expanded') ? 'click to collapse' : 'click to expand';
+        }
+
+        async function loadCode(taskId, changeId) {
+            const container = document.getElementById(`code-${taskId}`);
+            container.innerHTML = '<span style="font-family: IBM Plex Mono, monospace; font-size: 0.8rem;">Loading...</span>';
+            try {
+                const res = await fetch(`${API}/changes/${changeId}`);
+                if (!res.ok) { container.innerHTML = '<span>Could not load change.</span>'; return; }
+                const data = await res.json();
+                container.innerHTML = `
+                    <div style="font-family: IBM Plex Mono, monospace; font-size: 0.75rem; color: var(--secondary); margin-bottom: 0.35rem;">${esc(data.path)}</div>
+                    <div class="feed-diff">${esc(data.content || '(empty)')}</div>
+                `;
+            } catch (e) {
+                container.innerHTML = '<span>Could not load change.</span>';
+            }
         }
 
         // ---- Propose ----
