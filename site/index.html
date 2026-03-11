@@ -478,7 +478,7 @@
 
         <nav>
             <a href="/" class="nav-active">Feed</a>
-            <a href="#brief" onclick="document.getElementById('brief').scrollIntoView({behavior:'smooth'});return false;">Brief</a>
+            <a href="/brief">Brief</a>
             <a href="/about">About</a>
             <a href="https://github.com/hamhoagie/workwright">Source</a>
         </nav>
@@ -497,8 +497,8 @@
                 work gets better because the system learns what you actually value, not what you say you value.
             </p>
             <p style="font-size: 1.05rem; line-height: 1.65; margin-bottom: 0;">
-                This page is a live workspace. <strong>Propose a change below</strong> — a wright will
-                do it, defend it, and you crit the result. Accepted changes deploy here.
+                This page is a live workspace. <strong><a href="/brief" style="color: var(--fg);">Brief a wright</a></strong> to change it.
+                Accepted changes deploy here.
                 <a href="/about" style="color: var(--fg); border-bottom: 1px solid var(--fg);">Read more →</a>
             </p>
         </section>
@@ -507,35 +507,15 @@
         <section>
             <h2>Live Feed</h2>
             <div id="feed">
-                <div class="feed-empty">No tasks yet. Propose one below.</div>
+                <div class="feed-empty">No tasks yet. <a href="/brief" style="color: var(--fg); border-bottom: 1px solid var(--fg);">Brief a wright</a> to get started.</div>
             </div>
         </section>
 
-        <!-- PROPOSE -->
+        <!-- BRIEF CTA -->
         <section>
-            <h2 id="brief">Brief</h2>
-            <p style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 1.25rem;">
-                Brief a wright. Say what you want and why it matters — not how. The wright does the work, defends its choices, and the community crits the result..
+            <p style="font-size: 0.95rem; color: var(--secondary);">
+                Want to change this page? <a href="/brief" style="color: var(--fg); border-bottom: 1px solid var(--fg);">Brief a wright →</a>
             </p>
-            <form class="propose-form" id="propose-form">
-                <div class="field">
-                    <label>Scope</label>
-                    <div class="scope-toggle" id="scope-toggle">
-                        <button type="button" class="scope-btn active" data-scope="code" onclick="setScope(this)">Code</button>
-                        <button type="button" class="scope-btn" data-scope="design" onclick="setScope(this)">Design</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>What</label>
-                    <input type="text" id="intent" placeholder="add a dark mode toggle to the header" required>
-                </div>
-                <div class="field">
-                    <label>Why</label>
-                    <textarea id="why" placeholder="users should control their own reading experience rather than deferring to OS preference" required></textarea>
-                </div>
-                <input type="hidden" id="scope-value" value="code">
-                <button type="submit" class="submit">Submit Task</button>
-            </form>
         </section>
 
         <!-- TASTE GUIDE -->
@@ -671,47 +651,7 @@
             }
         }
 
-        // ---- Propose ----
-
-        function setScope(btn) {
-            document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById('scope-value').value = btn.dataset.scope;
-
-            const intentInput = document.getElementById('intent');
-            const whyInput = document.getElementById('why');
-            if (btn.dataset.scope === 'design') {
-                intentInput.placeholder = 'increase heading weight to 800 for stronger visual hierarchy';
-                whyInput.placeholder = 'the current 700 weight doesn\'t create enough separation from the body — the page reads flat';
-            } else {
-                intentInput.placeholder = 'add a dark mode toggle to the header';
-                whyInput.placeholder = 'users should control their own reading experience rather than deferring to OS preference';
-            }
-        }
-
-        document.getElementById('propose-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const intent = document.getElementById('intent').value;
-            const why = document.getElementById('why').value;
-            const scopeType = document.getElementById('scope-value').value;
-            const scope = scopeType === 'design' ? 'site/index.html:design' : 'site/index.html';
-
-            try {
-                const res = await fetch(`${API}/tasks`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ intent, why, scope })
-                });
-
-                if (res.ok) {
-                    document.getElementById('intent').value = '';
-                    document.getElementById('why').value = '';
-                    loadFeed();
-                }
-            } catch (e) {
-                console.error('API not available');
-            }
-        });
+        // (Brief form moved to /brief)
 
         // ---- Crit ----
 
