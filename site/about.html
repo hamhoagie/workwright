@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Workwright — About</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --fg: #000;
+            --bg: #fff;
+            --secondary: #1a1a1a;
+            --rule: #000;
+            --code-bg: #f0f0f0;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --fg: #fff;
+                --bg: #0a0a0a;
+                --secondary: #e0e0e0;
+                --rule: #fff;
+                --code-bg: #151515;
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "IBM Plex Sans", sans-serif;
+            font-weight: 400;
+            background: var(--bg);
+            color: var(--fg);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        nav {
+            margin-bottom: 3rem;
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+        }
+
+        nav a {
+            color: var(--fg);
+            text-decoration: none;
+            border-bottom: 1px solid var(--fg);
+        }
+
+        nav a:hover { opacity: 0.7; }
+
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+            margin-bottom: 1.5rem;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-top: 2.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            color: var(--secondary);
+        }
+
+        p strong {
+            color: var(--fg);
+        }
+
+        .lead {
+            font-size: 1.1rem;
+            color: var(--fg);
+            margin-bottom: 2rem;
+        }
+
+        code {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.88em;
+            background: var(--code-bg);
+            padding: 0.15em 0.35em;
+        }
+
+        pre {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            background: var(--code-bg);
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            overflow-x: auto;
+        }
+
+        .divider {
+            border: none;
+            border-top: 2px solid var(--fg);
+            margin: 2.5rem 0;
+        }
+
+        ol, ul {
+            margin-bottom: 1rem;
+            padding-left: 1.25rem;
+            color: var(--secondary);
+        }
+
+        li {
+            margin-bottom: 0.4rem;
+        }
+
+        li strong {
+            color: var(--fg);
+        }
+
+        footer {
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--rule);
+            font-size: 0.85rem;
+            color: var(--secondary);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        footer a {
+            color: var(--fg);
+            text-decoration: none;
+            border-bottom: 1px solid var(--fg);
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 2rem 1.25rem; }
+            h1 { font-size: 1.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <nav><a href="/">← Back</a></nav>
+
+        <h1>What is this?</h1>
+
+        <p class="lead">
+            This page is a live workspace. It's being built by the system it describes.
+        </p>
+
+        <p>
+            Workwright is a protocol for making things with AI. Not a coding assistant.
+            Not an agent framework. A <strong>crit system</strong> — where every piece of work
+            must be defended conceptually, and every defense gets judged.
+        </p>
+
+        <hr class="divider">
+
+        <h2>How it works</h2>
+
+        <ol>
+            <li><strong>You propose a change.</strong> Say what you want and why it matters. Not how — that's the wright's job.</li>
+            <li><strong>A wright does the work.</strong> A wright is an LLM that operates within the protocol. It reads the taste guide, does the work, and writes a defense — why it made these choices, conceptually, not just technically.</li>
+            <li><strong>You crit it.</strong> Read the diff and the defense. Score it. Your reason matters more than the number. A +0.8 with no reason teaches nothing. A -0.5 with "the defense doesn't address why these elements are grouped this way" teaches everything.</li>
+            <li><strong>The taste guide evolves.</strong> Accepted patterns become principles. Rejected ones become anti-patterns. Over time, wrights produce work that reflects the community's accumulated judgment.</li>
+            <li><strong>Accepted changes go live.</strong> This page is always the latest accepted state.</li>
+        </ol>
+
+        <h2>The two questions</h2>
+
+        <p>
+            Every piece of work must answer:
+        </p>
+
+        <ol>
+            <li><strong>Why are we making this?</strong></li>
+            <li><strong>How does it solve it elegantly?</strong></li>
+        </ol>
+
+        <p>
+            These are Socratic. They recurse. The wright answers them before writing a line
+            of code. The human asks them again during crit. "Why do you think what you think
+            you think?"
+        </p>
+
+        <h2>What's a wright?</h2>
+
+        <p>
+            Not an "agent." A wright. From Old English <em>wyrhta</em> — one who works.
+            Shipwright, wheelwright, playwright. A craftsperson who works within a tradition,
+            not a contractor executing instructions.
+        </p>
+
+        <p>
+            A wright that can't defend its choices — regardless of whether the code works —
+            has produced accidental work. Working code with no defensible reason for its form
+            won't survive the next change.
+        </p>
+
+        <h2>What's a taste guide?</h2>
+
+        <p>
+            Not a style guide. Not linting rules. A living document generated from crit signals —
+            what gets accepted, what gets rejected, and <strong>why</strong>. It reflects the
+            community's actual taste, not their stated preferences.
+        </p>
+
+        <p>
+            The guide starts empty. It emerges from judgment. Right now it has
+            <span id="signal-count">a few</span> signals. Give it more.
+        </p>
+
+        <h2>What's the point?</h2>
+
+        <p>
+            We gave the world a generative engine and most people produced slop with it.
+            Then blamed the engine. AI didn't create slop. It revealed that the loop between
+            intention and evaluation was broken.
+        </p>
+
+        <p>
+            Workwright fixes the loop. Not by adding more automation — by making the
+            <strong>unit of work small enough to actually judge</strong>, and requiring
+            every piece of work to carry its own argument for existing.
+        </p>
+
+        <p>
+            The same protocol works for LLMs, humans, and teams. The system doesn't care
+            what you are. It cares if you can defend your work.
+        </p>
+
+        <hr class="divider">
+
+        <h2>Try it</h2>
+
+        <p>
+            Go to the <a href="/">home page</a> and propose a change. The scope is this
+            site — <code>site/index.html</code>. A wright will pick it up, do the work,
+            write a defense, and submit it for crit. You score it.
+        </p>
+
+        <p>
+            If the protocol works, this page gets better over time. If it doesn't,
+            that's visible too. Either way, it's honest.
+        </p>
+
+        <pre>$ ww task "your intent" --why "your reason"
+$ ww run-next
+$ ww crit &lt;task_id&gt;</pre>
+
+        <footer>
+            <span>March 2026</span>
+            <a href="https://github.com/hamhoagie/workwright">Source</a>
+        </footer>
+
+    </div>
+
+    <script>
+        fetch('/api/taste')
+            .then(r => r.json())
+            .then(d => {
+                const el = document.getElementById('signal-count');
+                if (el && d.signal_count) el.textContent = d.signal_count + ' signals';
+            })
+            .catch(() => {});
+    </script>
+</body>
+</html>
