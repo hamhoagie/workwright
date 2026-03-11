@@ -96,3 +96,9 @@ Form follows function — Bauhaus, via Pratt Institute, via building things that
 ---
 
 *Billy & Clawdius, March 2026*
+
+## The Loop in Three Words
+
+**Brief → Defense → Crit**
+
+You brief the wright. The wright defends its choices. You crit the defense. That's it.
