@@ -45,18 +45,22 @@
         }
 
         nav {
-            margin-bottom: 3rem;
+            margin-bottom: 2rem;
             font-family: "IBM Plex Mono", monospace;
             font-size: 0.85rem;
+            font-weight: 500;
+            display: flex;
+            gap: 1.5rem;
         }
 
         nav a {
             color: var(--fg);
             text-decoration: none;
-            border-bottom: 1px solid var(--fg);
+            opacity: 0.5;
         }
 
-        nav a:hover { opacity: 0.7; }
+        nav a:hover { opacity: 0.8; }
+        nav a.nav-active { opacity: 1; border-bottom: 2px solid var(--fg); }
 
         h1 {
             font-size: 2.25rem;
@@ -150,7 +154,11 @@
 <body>
     <div class="container">
 
-        <nav><a href="/">← Back</a></nav>
+        <nav>
+            <a href="/">Feed</a>
+            <a href="/about" class="nav-active">About</a>
+            <a href="https://github.com/hamhoagie/workwright">Source</a>
+        </nav>
 
         <h1>What is this?</h1>
 
