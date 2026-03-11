@@ -190,17 +190,16 @@ class Handler(BaseHTTPRequestHandler):
         if len(intent) > 200 or len(why) > 500:
             return self._json({"error": "too long"}, 400)
 
-        scope_type = body.get("scope", "site/index.html")
-        # Preserve :design tag for display, use clean path for file ops
-        file_scope = scope_type.split(":")[0] if ":" in scope_type else scope_type
-        if not file_scope:
-            file_scope = "site/index.html"
+        scope = body.get("scope", "site/index.html")
+        file_path = scope.split(":")[0] if ":" in scope else scope
+        if not file_path:
+            file_path = "site/index.html"
 
         task = store_tasks.create(
             intent=intent,
             why=why,
-            scope=file_scope,
-            context=[file_scope],
+            scope=scope,              # keep :design tag
+            context=[file_path],       # clean path for file ops
         )
 
         # Wright works on it in background

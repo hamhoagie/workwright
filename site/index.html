@@ -478,6 +478,7 @@
 
         <nav>
             <a href="/" class="nav-active">Feed</a>
+            <a href="#brief" onclick="document.getElementById('brief').scrollIntoView({behavior:'smooth'});return false;">Brief</a>
             <a href="/about">About</a>
             <a href="https://github.com/hamhoagie/workwright">Source</a>
         </nav>
@@ -512,10 +513,9 @@
 
         <!-- PROPOSE -->
         <section>
-            <h2>Propose a Change</h2>
+            <h2 id="brief">Brief</h2>
             <p style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 1.25rem;">
-                This page is a live workspace. Propose a change to it — a wright will do the work,
-                defend its choices, and the community crits the result. Accepted changes deploy here.
+                Brief a wright. Say what you want and why it matters — not how. The wright does the work, defends its choices, and the community crits the result..
             </p>
             <form class="propose-form" id="propose-form">
                 <div class="field">

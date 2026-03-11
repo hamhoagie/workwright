@@ -113,8 +113,9 @@ class Wright:
         # Claim the task
         task = self.tasks.claim(task_id, self.wright_id)
 
-        # Read context
-        file_content = self.workspace.read_file(task.scope)
+        # Read context — strip scope tags like :design
+        file_scope = task.scope.split(":")[0] if ":" in task.scope else task.scope
+        file_content = self.workspace.read_file(file_scope)
         taste_guide = self.taste.guide()
         context = {}
         for ctx_path in (task.context or []):
@@ -124,7 +125,7 @@ class Wright:
 
         # Lock the file
         try:
-            self.workspace.lock(task.scope, self.wright_id, task.intent)
+            self.workspace.lock(file_scope, self.wright_id, task.intent)
         except RuntimeError:
             return WorkResult(
                 task_id=task_id, success=False, files_changed=[],
@@ -142,14 +143,14 @@ class Wright:
 
         # Write the file
         self.workspace.write_file(
-            task.scope, new_content, self.wright_id, task.intent
+            file_scope, new_content, self.wright_id, task.intent
         )
 
         # Self-evaluate
-        eval_result = evaluate_file(self.root / task.scope)
+        eval_result = evaluate_file(self.root / file_scope)
 
         # Unlock
-        self.workspace.unlock(task.scope, self.wright_id)
+        self.workspace.unlock(file_scope, self.wright_id)
 
         # Get change IDs
         changes = self.workspace.recent_changes(limit=1)
@@ -165,7 +166,7 @@ class Wright:
         return WorkResult(
             task_id=task_id,
             success=True,
-            files_changed=[task.scope],
+            files_changed=[file_scope],
             change_ids=change_ids,
             evaluation_score=eval_result.score,
             defense=defense,
