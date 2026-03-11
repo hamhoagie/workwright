@@ -391,7 +391,12 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if not filepath.exists():
-            filepath = SITE / "index.html"
+            # Try .html extension (for /register → register.html, etc.)
+            html_path = SITE / (path.lstrip("/") + ".html")
+            if html_path.exists() and html_path.resolve().is_relative_to(SITE.resolve()):
+                filepath = html_path
+            else:
+                filepath = SITE / "index.html"
 
         content_types = {
             ".html": "text/html",
