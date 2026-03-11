@@ -90,18 +90,7 @@ Every piece of work must answer:
 ```
 
 ## Instructions
-1. Make the change described in the intent
-2. Follow the Unix principles strictly
-3. Follow the taste guide
-4. Return ONLY the complete updated file content
-5. No explanations, no markdown fences, just the code
-
-## Response Format
-First: the complete file content.
-Then: a line containing only "---DEFENSE---"
-Then: your conceptual defense — why you made these specific choices.
-Not what you did (the diff shows that). Why it's right.
-Defend the form, not the function. 2-4 sentences max."""
+Make the change described in the intent. Follow the principles. Return the complete file content — no explanations, no markdown fences, just the code."""
 
 
 class Wright:
@@ -143,12 +132,13 @@ class Wright:
                 message=f"Could not lock {task.scope}",
             )
 
-        # Build prompt and call LLM
+        # Build prompt and call LLM for code
         prompt = build_prompt(task, file_content, taste_guide, context)
-        new_content = _call_llm(prompt)
+        new_content = _strip_fences(_call_llm(prompt).strip())
 
-        # Parse response into code and defense
-        new_content, defense = _parse_response(new_content)
+        # Second call: defense
+        defense_prompt = _build_defense_prompt(task, new_content)
+        defense = _call_llm(defense_prompt).strip()
 
         # Write the file
         self.workspace.write_file(
@@ -190,13 +180,22 @@ class Wright:
         return self.work(pending[0].id)
 
 
-def _parse_response(text: str) -> tuple[str, str]:
-    """Split response into code and defense."""
-    if "---DEFENSE---" in text:
-        code, defense = text.split("---DEFENSE---", 1)
-    else:
-        code, defense = text, ""
-    return _strip_fences(code.strip()), defense.strip()
+def _build_defense_prompt(task: Task, code: str) -> str:
+    """Ask the wright to defend its choices."""
+    return f"""You just completed a piece of work. Now defend it.
+
+**Task:** {task.intent}
+**Why it was needed:** {task.why}
+
+**What you produced:**
+```
+{code[:3000]}
+```
+
+Defend your choices. Not what you did — the diff shows that.
+Why this form and not another. Why these specific decisions are right.
+
+2-4 sentences. Conceptual, not technical. Go:"""
 
 
 def _strip_fences(text: str) -> str:
