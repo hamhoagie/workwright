@@ -269,6 +269,16 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             return self._json({"error": str(e)}, 409)
 
+        # Record registration in the feed
+        store_tasks.create(
+            intent=f"{display_name} joined.",
+            why="New participant registered.",
+            scope="system:registration",
+            context=[],
+            submitted_by=user.id,
+            submitted_by_name=user.display_name,
+        )
+
         self._json({
             "user_id": user.id,
             "token": user.token,

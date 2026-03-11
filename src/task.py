@@ -61,7 +61,9 @@ class TaskStore:
             self.tasks_file.touch()
 
     def create(self, intent: str, why: str, scope: str,
-               context: list[str] = None) -> Task:
+               context: list[str] = None,
+               submitted_by: str = None,
+               submitted_by_name: str = None) -> Task:
         """Create a new task."""
         task = Task(
             id=uuid.uuid4().hex[:8],
@@ -69,6 +71,8 @@ class TaskStore:
             why=why,
             scope=scope,
             context=context or [],
+            submitted_by=submitted_by,
+            submitted_by_name=submitted_by_name,
         )
         self._append(task)
         return task
