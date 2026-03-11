@@ -165,7 +165,11 @@ class Wright:
         changes = self.workspace.recent_changes(limit=1)
         change_ids = [c.id for c in changes]
 
-        # Submit for review
+        # Store defense on task and submit
+        task = self.tasks.get(task_id)
+        if task:
+            task.defense = defense
+            self.tasks._update(task)
         self.tasks.submit(task_id, change_ids)
 
         return WorkResult(

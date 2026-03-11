@@ -37,6 +37,7 @@ class Task:
     started: Optional[float] = None
     completed: Optional[float] = None
     change_ids: list[str] = field(default_factory=list)  # workspace changelog refs
+    defense: Optional[str] = None          # why the wright made these choices
     taste_score: Optional[float] = None
     taste_note: Optional[str] = None
 
