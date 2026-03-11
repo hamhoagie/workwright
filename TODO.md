@@ -56,3 +56,14 @@ Recursive self-improvement from day one.
 - CLI is the interface (ww.py)
 - No framework dependencies
 - Python stdlib + LLM API calls only
+
+## v2 — Rust Rewrite
+- [ ] Rewrite core in Rust
+- [ ] User registration + login (email or GitHub OAuth)
+- [ ] Per-user tokens, revocable
+- [ ] Identity on every brief and crit (who said what)
+- [ ] Trust scores per participant (earned through accepted work)
+- [ ] Taste guide weighted by reviewer trust
+- [ ] Wright writes to staging, never live — deploy only on accepted crit
+- [ ] Multi-file scope for briefs
+- [ ] Persistent rate limiting (not in-memory)
