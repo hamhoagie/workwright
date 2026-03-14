@@ -144,7 +144,7 @@ class UserStore:
         admin_token = os.environ.get("WW_SUBMIT_TOKEN", secrets.token_urlsafe(24))
         admin = User(
             id=uuid.uuid4().hex[:8],
-            email="billy@billy.xxx",
+            email=os.environ.get("WW_ADMIN_EMAIL", "admin@localhost"),
             display_name="billy",
             token=admin_token,
             trust_score=1.0,
