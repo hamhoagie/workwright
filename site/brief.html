@@ -174,6 +174,12 @@
             .container { padding: 2rem 1.25rem; }
             h1 { font-size: 1.75rem; }
         }
+        .text-link { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--fg); }
+        .divider { border: none; border-top: 2px solid var(--rule); margin: 2.5rem 0; }
+        .section-heading { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem; }
+        .section-desc { color: var(--secondary); margin-bottom: 1.25rem; font-size: 0.95rem; }
+        .reg-result { margin-top: 1rem; }
+        .token-display { font-size: 0.8rem; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -212,13 +218,13 @@
         </form>
 
         <div class="confirmation" id="confirmation">
-            ✓ Brief submitted. A wright will pick it up. Watch the <a href="/" style="color: var(--fg); border-bottom: 1px solid var(--fg);">feed</a> for the defense.
+            ✓ Brief submitted. A wright will pick it up. Watch the <a href="/" class="text-link">feed</a> for the defense.
         </div>
 
-        <hr style="border: none; border-top: 2px solid var(--rule); margin: 2.5rem 0;">
+        <hr class="divider">
 
-        <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">Register</h2>
-        <p style="color: var(--secondary); margin-bottom: 1.25rem; font-size: 0.95rem;">
+        <h2 class="section-heading">Register</h2>
+        <p class="section-desc">
             Need an access token? Register to get one. Tokens let you submit briefs and track your work.
         </p>
         <form id="register-form">
@@ -232,7 +238,7 @@
             </div>
             <button type="submit" class="submit">Register</button>
         </form>
-        <div class="confirmation" id="reg-confirmation" style="margin-top: 1rem;"></div>
+        <div class="confirmation" id="reg-confirmation" class="reg-result"></div>
 
         <footer>
             <span>Brief → Defense → Crit</span>
@@ -282,7 +288,7 @@
                 if (res.ok) {
                     localStorage.setItem('ww_token', data.token);
                     conf.style.display = 'block';
-                    conf.innerHTML = `✓ Registered as <strong>${display_name}</strong>. Your token has been saved locally.<br><code style="font-size:0.8rem; word-break:break-all;">${data.token}</code>`;
+                    conf.innerHTML = `✓ Registered as <strong>${display_name}</strong>. Your token has been saved locally.<br><code class="token-display">${data.token}</code>`;
                 } else {
                     conf.style.display = 'block';
                     conf.textContent = `Error: ${data.error}`;

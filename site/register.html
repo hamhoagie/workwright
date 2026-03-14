@@ -177,6 +177,8 @@
             .container { padding: 2rem 1.25rem; }
             h1 { font-size: 1.75rem; }
         }
+        .hidden { display: none; }
+        .token-label { margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -190,7 +192,7 @@
             <a href="https://github.com/hamhoagie/workwright">Source</a>
         </nav>
 
-        <div id="already-registered" style="display:none;">
+        <div id="already-registered" class="hidden">
             <div class="already">
                 Logged in as <span class="name" id="current-name"></span>. Your token is stored in this browser.
             </div>
@@ -214,7 +216,7 @@
 
         <div class="result" id="reg-result">
             <p>Welcome, <strong id="res-name"></strong>.</p>
-            <p style="margin-top: 0.5rem;">Your token:</p>
+            <p class="token-label">Your token:</p>
             <p class="token" id="res-token"></p>
             <p class="note">This token is now saved in your browser. You can start submitting briefs on the <a href="/brief">Brief</a>
             <a href="/crit">Crit</a> page.</p>

@@ -368,6 +368,11 @@
             100% { transform: rotate(360deg); }
         }
 
+        .crit-queue-hidden { display: none; }
+        .preview-visible { display: block; }
+        .feedback-label { margin-top: 0.75rem; margin-bottom: 0.25rem; }
+        .feedback-text { opacity: 0.7; margin-bottom: 1rem; }
+
         .queue-item.critted {
             transition: all 0.4s ease;
             max-height: 2000px;
@@ -422,7 +427,7 @@
             </div>
         </div>
 
-        <div id="crit-queue" style="display: none;"></div>
+        <div id="crit-queue" class="crit-queue-hidden"></div>
 
     </div>
 
@@ -490,14 +495,14 @@
             <div class="task-why">${esc(task.why)}</div>
             <div class="task-meta">by ${esc(submitter)} · ${time}${task.attempts > 0 ? ` · attempt ${task.attempts + 1}/3` : ''}</div>
             ${task.feedback && task.feedback.length > 0 ? `
-                <div class="defense-label" style="margin-top:0.75rem;margin-bottom:0.25rem">Previous rejections</div>
-                <div class="defense-text" style="opacity:0.7;margin-bottom:1rem">${task.feedback.map((f,i) => esc((i+1) + '. ' + f)).join('\\n')}</div>
+                <div class="defense-label feedback-label">Previous rejections</div>
+                <div class="defense-text feedback-text">${task.feedback.map((f,i) => esc((i+1) + '. ' + f)).join('\\n')}</div>
             ` : ''}
 
             ${isDesign ? `
                 <div class="defense-label">Preview</div>
                 <iframe class="preview-frame" id="preview-${task.id}"
-                    src="/api/render/${task.id}" style="display:block;"></iframe>
+                    src="/api/render/${task.id}" class="preview-visible"></iframe>
                 <div class="code-section" id="code-${task.id}">
                     <button class="preview-toggle" onclick="loadDiff('${task.id}')">Show code</button>
                 </div>
