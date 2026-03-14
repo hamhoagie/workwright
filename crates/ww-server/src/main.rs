@@ -320,6 +320,23 @@ async fn post_crit(
                 task.attempts, body.reason
             ));
             state.db.update_task(&task).ok();
+
+            // Distill a meta-lesson from the failure pattern
+            if let Some(ref llm) = state.llm {
+                let feedback = task.feedback.clone();
+                let intent = task.intent.clone();
+                let db = state.db.clone();
+                let llm = llm.clone();
+                std::thread::spawn(move || {
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("lesson runtime");
+                    rt.block_on(async {
+                        distill_lesson(&db, &llm, &intent, &feedback).await;
+                    });
+                });
+            }
         } else {
             // Reset for retry — wright will pick it up again
             task.status = ww_workspace::TaskStatus::Pending;
@@ -353,6 +370,49 @@ async fn post_crit(
         "retrying": score < 0.0 && task.attempts < 3,
         "attempt": task.attempts,
     })).into_response()
+}
+
+async fn distill_lesson(db: &Db, llm: &LlmClient, intent: &str, feedback: &[String]) {
+    let rejections = feedback.iter()
+        .enumerate()
+        .map(|(i, f)| format!("  {}. {}", i + 1, f))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let prompt = format!(
+        r#"A wright attempted this task 3 times and was rejected every time.
+
+**Task:** {intent}
+
+**Rejection reasons:**
+{rejections}
+
+Distill this into ONE principle — a short, sharp lesson that prevents this failure pattern from recurring. Not a description of what happened. A rule for the future. One sentence, imperative voice.
+
+Example: "Never use inline styles — external stylesheets or scoped CSS only."
+Example: "If you don't have the file content, refuse the task instead of hallucinating."
+
+Your principle:"#
+    );
+
+    match llm.call(&prompt).await {
+        Ok(lesson) => {
+            let lesson = lesson.trim().trim_matches('"').to_string();
+            tracing::info!(lesson = %lesson, "meta-lesson distilled from failure");
+
+            // Record as a taste signal with high negative weight
+            let signal = ww_workspace::TasteSignal {
+                score: -1.0,
+                reason: format!("[META-LESSON] {}", lesson),
+                task_id: "system:lesson".to_string(),
+                change_id: None,
+                timestamp: now_secs(),
+                tags: vec!["meta-lesson".to_string()],
+            };
+            db.record_taste(&signal).ok();
+        }
+        Err(e) => tracing::warn!("failed to distill lesson: {e}"),
+    }
 }
 
 fn deploy_site(root: &std::path::Path) {
@@ -548,25 +608,46 @@ fn build_taste_guide(signals: &[ww_workspace::TasteSignal]) -> String {
     if signals.is_empty() {
         return "No taste signals yet. The guide emerges from crit.".to_string();
     }
+
+    let lessons: Vec<_> = signals.iter()
+        .filter(|s| s.reason.starts_with("[META-LESSON]"))
+        .collect();
+    let accepted: Vec<_> = signals.iter()
+        .filter(|s| s.score > 0.0)
+        .collect();
+    let rejected: Vec<_> = signals.iter()
+        .filter(|s| s.score <= 0.0 && !s.reason.starts_with("[META-LESSON]"))
+        .collect();
+
     let mut guide = format!(
         "## Taste Guide (learned from human feedback)\n\n*Based on {} taste signals.*\n\n",
         signals.len()
     );
-    let accepted: Vec<_> = signals.iter().filter(|s| s.score > 0.0).collect();
-    let rejected: Vec<_> = signals.iter().filter(|s| s.score <= 0.0).collect();
+
+    // Lessons first — these are the hardest-won knowledge
+    if !lessons.is_empty() {
+        guide.push_str("**Lessons (distilled from repeated failure):**\n");
+        for s in &lessons {
+            guide.push_str(&format!("- {}\n", s.reason.trim_start_matches("[META-LESSON] ")));
+        }
+        guide.push('\n');
+    }
+
     if !accepted.is_empty() {
-        guide.push_str("**Extracted principles (from accepted work):**\n");
+        guide.push_str("**Principles (from accepted work):**\n");
         for s in &accepted {
             guide.push_str(&format!("- {}\n", s.reason));
         }
         guide.push('\n');
     }
+
     if !rejected.is_empty() {
         guide.push_str("**Anti-patterns (from rejected work):**\n");
         for s in &rejected {
             guide.push_str(&format!("- {}\n", s.reason));
         }
     }
+
     guide
 }
 
