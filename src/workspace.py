@@ -53,6 +53,8 @@ class Workspace:
         self.meta_dir.mkdir(parents=True, exist_ok=True)
         self._locks_file = self.meta_dir / "locks.json"
         self._changelog_file = self.meta_dir / "changelog.jsonl"
+        self._staging_dir = self.meta_dir / "staging"
+        self._staging_dir.mkdir(exist_ok=True)
         self._init_files()
 
     def _init_files(self):
@@ -162,17 +164,53 @@ class Workspace:
             return fp.read_text()
         return None
 
-    def write_file(self, path: str, content: str, agent_id: str, intent: str):
-        """Write a file, record the change. Must hold the lock."""
+    def write_file(self, path: str, content: str, agent_id: str, intent: str,
+                   staging: bool = False):
+        """Write a file, record the change. Must hold the lock.
+
+        If staging=True, write to .workwright/staging/{path} instead of the
+        live file. The live file stays untouched until crit accepts.
+        """
         lock = self.locked_by(path)
         if lock and lock["agent_id"] != agent_id:
             raise RuntimeError(f"{path} locked by {lock['agent_id']}")
 
         fp = self.root / path
         before = fp.read_text() if fp.exists() else None
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        fp.write_text(content)
+
+        if staging:
+            staged = self._staging_dir / path
+            staged.parent.mkdir(parents=True, exist_ok=True)
+            staged.write_text(content)
+        else:
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_text(content)
+
         self.record_change(path, agent_id, intent, before, content)
+
+    def promote_staged(self, path: str) -> bool:
+        """Copy staged file to live. Returns True if promoted."""
+        staged = self._staging_dir / path
+        if not staged.exists():
+            return False
+        live = self.root / path
+        live.parent.mkdir(parents=True, exist_ok=True)
+        live.write_text(staged.read_text())
+        staged.unlink()
+        return True
+
+    def read_staged(self, path: str) -> Optional[str]:
+        """Read a staged file (for preview)."""
+        staged = self._staging_dir / path
+        if staged.exists():
+            return staged.read_text()
+        return None
+
+    def discard_staged(self, path: str):
+        """Remove a staged file (on rejection)."""
+        staged = self._staging_dir / path
+        if staged.exists():
+            staged.unlink()
 
     # --- Internals ---
 

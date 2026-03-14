@@ -1,19 +1,24 @@
 {
   "likes": {
-    "general": 3,
-    "clean-code": 2,
-    "simplicity": 1
+    "general": 10,
+    "clean-code": 4,
+    "simplicity": 2,
+    "small-units": 2
   },
   "dislikes": {
-    "general": 1
+    "general": 2
   },
   "principles": [
-    "Good extraction. Clean, correct imports, each command is a single function. Over the 10-function limit but that's because we have 12 commands - acceptable for a commands module. Context files made the difference.",
-    "Defense is right \u2014 nav consistency is about trust. But the wright could only touch one file. The actual fix required editing about.html too. Highlights a limitation: multi-file briefs need multi-file scope.",
-    "Best defense yet. The wright recognized that executing the brief would cause the exact failure the brief describes. Refusing to clobber the file IS the correct implementation of the trust gradient. The architectural fix belongs in wright.py and server/app.py, not the page.",
-    "Clean separation. Feed is read, brief is write, about is learn. Each page has one job.",
-    "Correct fix. Background must fill viewport. Applied to brief and about pages.",
-    "Right architecture. Public read, gated write. Simplest auth that works. No OAuth theater."
+    "Best defense of the batch. Three distinct failure modes mapped to three except clauses \u2014 not defensive theater. LLMError as a typed exception that separates API failure from programmer error is exactly right. The boundary between call_llm (knows LLMs) and wright (knows tasks) is respected.",
+    "Correct convention choice \u2014 --json not --format=json. getattr defensive pattern is pragmatic. Fields chosen for serialization are the right ones. Solid but not architecturally significant \u2014 this is a utility improvement, well executed.",
+    "Client-side relative timestamps that stay honest is the right call. A static \"2 hours ago\" that never updates is a lie. The wright correctly identified the temporal dimension the feed was missing \u2014 time is context.",
+    "Feed is chronological, taste is synthetic \u2014 different reading modes deserve different pages. Earns its own URL. Good separation of what happened vs what we believe.",
+    "Trust score inline with name is exactly right \u2014 the score IS the identity. Monospace for the number is a good typographic choice. Makes the trust gradient visible, which is the whole point of the protocol.",
+    "Rejecting the hamburger menu is correct \u2014 hiding navigation at launch defeats the purpose. Keeping visible links with better spacing and smaller type on mobile is the right trade. Solid defense about why hiding things is wrong for a first impression.",
+    "Critical for launch. The description names the mechanic, not the category \u2014 that is correct positioning. The social card IS the first impression for most of the LinkedIn audience. This is the highest-leverage pre-launch task in the batch.",
+    "Letter-spacing at that size uppercase is correct \u2014 small caps need air. Aggressive but right.",
+    "Signal count in the heading row earns the authority claim. Simple, useful, puts the number where the assertion is.",
+    "Activity indicator solves a real perception gap. Between submit and result, the user has no mental model. Good intent, useful for demo."
   ],
-  "signal_count": 7
+  "signal_count": 20
 }

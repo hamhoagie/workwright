@@ -2,6 +2,7 @@
 commands — one function per CLI verb.
 """
 
+import json
 import os
 import sys
 
@@ -35,6 +36,18 @@ def cmd_task(args):
 def cmd_tasks(args):
     store = TaskStore(args.path)
     tasks = store.all()
+
+    if getattr(args, "json", False):
+        print(json.dumps([{
+            "id": t.id,
+            "intent": t.intent,
+            "status": t.status.value,
+            "scope": t.scope,
+            "taste_score": t.taste_score,
+            "taste_note": t.taste_note,
+        } for t in tasks], indent=2))
+        return
+
     if not tasks:
         print("No tasks.")
         return
@@ -90,6 +103,11 @@ def cmd_evaluate(args):
 
 def cmd_taste(args):
     taste = TasteStore(args.path)
+
+    if getattr(args, "json", False):
+        print(json.dumps(taste.patterns(), indent=2))
+        return
+
     print(taste.guide())
 
 

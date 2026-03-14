@@ -8,7 +8,6 @@ the human defined.
 Not an "agent." A wright. One who works within a craft tradition.
 """
 
-import json
 import os
 import time
 from pathlib import Path
@@ -33,23 +32,37 @@ class WorkResult:
     message: str                # what the wright did
 
 
+class LLMError(Exception):
+    """An LLM call failed in a known, recoverable way."""
+    pass
+
+
 def _call_llm(prompt: str, model: str = "sonnet") -> str:
     """
     Call an LLM. Thin wrapper — keeps the wright model-agnostic.
 
-    Uses OpenClaw's sessions_spawn pattern via CLI for now.
-    Can be swapped to direct API calls later.
+    Raises LLMError on rate limits, network failures, or bad responses.
     """
-    # For MVP: use Anthropic API directly via environment
     import anthropic
 
-    client = anthropic.Anthropic()
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.RateLimitError as e:
+        raise LLMError(f"Rate limited: {e}") from e
+    except anthropic.APIConnectionError as e:
+        raise LLMError(f"Network error: {e}") from e
+    except anthropic.APIStatusError as e:
+        raise LLMError(f"API error {e.status_code}: {e.message}") from e
+
+    try:
+        return response.content[0].text
+    except (IndexError, AttributeError) as e:
+        raise LLMError(f"Malformed response — no text content: {e}") from e
 
 
 def build_prompt(task: Task, file_content: str, taste_guide: str,
@@ -93,6 +106,20 @@ Every piece of work must answer:
 Make the change described in the intent. Follow the principles. Return the complete file content — no explanations, no markdown fences, just the code."""
 
 
+def _fail_task(tasks: TaskStore, task_id: str, reason: str) -> WorkResult:
+    """Record a visible failure — set status, surface the reason."""
+    task = tasks.get(task_id)
+    if task:
+        task.status = TaskStatus.FAILED
+        task.defense = reason
+        tasks._update(task)
+    return WorkResult(
+        task_id=task_id, success=False, files_changed=[],
+        change_ids=[], evaluation_score=0.0, defense=reason,
+        message=f"Failed: {reason}",
+    )
+
+
 class Wright:
     """
     A wright that can pick up tasks and do work.
@@ -110,7 +137,6 @@ class Wright:
 
     def work(self, task_id: str) -> WorkResult:
         """Pick up a task and do the work."""
-        # Claim the task
         task = self.tasks.claim(task_id, self.wright_id)
 
         # Read context — strip scope tags like :design
@@ -127,27 +153,27 @@ class Wright:
         try:
             self.workspace.lock(file_scope, self.wright_id, task.intent)
         except RuntimeError:
-            return WorkResult(
-                task_id=task_id, success=False, files_changed=[],
-                change_ids=[], evaluation_score=0.0, defense="",
-                message=f"Could not lock {task.scope}",
-            )
+            return _fail_task(self.tasks, task_id, f"Could not lock {task.scope}")
 
-        # Build prompt and call LLM for code
-        prompt = build_prompt(task, file_content, taste_guide, context)
-        new_content = _strip_fences(_call_llm(prompt).strip())
+        # Call LLM — fail visibly if it breaks
+        try:
+            prompt = build_prompt(task, file_content, taste_guide, context)
+            new_content = _strip_fences(_call_llm(prompt).strip())
+            defense_prompt = _build_defense_prompt(task, new_content)
+            defense = _call_llm(defense_prompt).strip()
+        except LLMError as e:
+            self.workspace.unlock(file_scope, self.wright_id)
+            return _fail_task(self.tasks, task_id, str(e))
 
-        # Second call: defense
-        defense_prompt = _build_defense_prompt(task, new_content)
-        defense = _call_llm(defense_prompt).strip()
-
-        # Write the file
+        # Write to staging — never touch the live file
         self.workspace.write_file(
-            file_scope, new_content, self.wright_id, task.intent
+            file_scope, new_content, self.wright_id, task.intent,
+            staging=True,
         )
 
-        # Self-evaluate
-        eval_result = evaluate_file(self.root / file_scope)
+        # Self-evaluate against the staged content
+        staged_path = self.workspace._staging_dir / file_scope
+        eval_result = evaluate_file(staged_path if staged_path.exists() else self.root / file_scope)
 
         # Unlock
         self.workspace.unlock(file_scope, self.wright_id)

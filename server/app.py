@@ -213,11 +213,20 @@ class Handler(BaseHTTPRequestHandler):
         self._json(self._user.profile_dict())
 
     def _get_preview(self, change_id):
-        """Serve the proposed file as a rendered HTML page."""
+        """Serve the staged file as a rendered HTML page for review."""
         ws = Workspace(ROOT)
         changes = ws.recent_changes(limit=100)
         for c in changes:
             if c.id == change_id:
+                # Try staged first, fall back to live
+                staged = ws.read_staged(c.path)
+                if staged and c.path.endswith(".html"):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(staged.encode())
+                    return
                 filepath = ROOT / c.path
                 if filepath.exists() and c.path.endswith(".html"):
                     self.send_response(200)
@@ -383,9 +392,15 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 pass  # submitter no longer exists
 
-        # If accepted, deploy
+        # Promote or discard staged files
+        ws = Workspace(ROOT)
+        file_scope = task.scope.split(":")[0] if ":" in task.scope else task.scope
         if score > 0:
-            _deploy_site()
+            promoted = ws.promote_staged(file_scope)
+            if promoted:
+                _deploy_site()
+        else:
+            ws.discard_staged(file_scope)
 
         self._json({"ok": True, "score": score})
 
@@ -437,16 +452,20 @@ def _run_wright_async(task_id):
 
 
 def _deploy_site():
-    """Copy site to the web server."""
+    """Sync site directory to the web server."""
     import subprocess
+    dest = "billy@WW_DEPLOY_HOST"
+    web_root = "/var/www/workwright.xyz/html"
     try:
+        # rsync all site files — only changed ones transfer
         subprocess.run([
-            "scp", str(SITE / "index.html"),
-            "billy@WW_DEPLOY_HOST:/tmp/ww-index.html"
-        ], timeout=10, capture_output=True)
+            "rsync", "-az", "--delete",
+            str(SITE) + "/",
+            f"{dest}:/tmp/ww-site/"
+        ], timeout=15, capture_output=True)
         subprocess.run([
-            "ssh", "billy@WW_DEPLOY_HOST",
-            "sudo cp /tmp/ww-index.html /var/www/workwright.xyz/html/index.html"
+            "ssh", dest,
+            f"sudo rsync -a /tmp/ww-site/ {web_root}/"
         ], timeout=10, capture_output=True)
     except Exception as e:
         print(f"Deploy error: {e}")
