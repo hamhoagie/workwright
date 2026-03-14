@@ -1,0 +1,218 @@
+/* Workwright — Design System
+   IBM Plex Sans + Mono. Black/white. No gray on gray. */
+
+:root {
+    --fg: #000;
+    --bg: #fff;
+    --secondary: #1a1a1a;
+    --rule: #000;
+    --input-bg: #f5f5f5;
+    --code-bg: #f0f0f0;
+    --accept: #1a7a1a;
+    --reject: #7a1a1a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --fg: #fff;
+        --bg: #0a0a0a;
+        --secondary: #e0e0e0;
+        --rule: #fff;
+        --input-bg: #1a1a1a;
+        --code-bg: #151515;
+        --accept: #4ade80;
+        --reject: #f87171;
+    }
+}
+
+/* ---- RESET ---- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ---- BASE ---- */
+body {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 400;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+}
+
+/* ---- NAV ---- */
+nav {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 2rem;
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+nav a {
+    color: var(--fg);
+    text-decoration: none;
+    opacity: 0.5;
+}
+
+nav a:hover { opacity: 0.8; }
+nav a.nav-active { opacity: 1; border-bottom: 2px solid var(--fg); }
+
+/* ---- TYPOGRAPHY ---- */
+h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 0.5rem;
+}
+
+h2 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 1.25rem;
+}
+
+header { margin-bottom: 3rem; }
+header p { font-size: 1.125rem; color: var(--secondary); }
+section { margin-bottom: 3rem; }
+
+.subtitle {
+    font-size: 1rem;
+    color: var(--secondary);
+    margin-bottom: 2rem;
+}
+
+.lead {
+    font-size: 1.1rem;
+    color: var(--fg);
+    margin-bottom: 2rem;
+}
+
+p { margin-bottom: 1rem; color: var(--secondary); }
+p strong { color: var(--fg); }
+
+/* ---- LINKS ---- */
+.text-link {
+    color: var(--fg);
+    text-decoration: none;
+    border-bottom: 1px solid var(--fg);
+}
+
+/* ---- FORMS ---- */
+.field { margin-bottom: 1.25rem; }
+
+.field label {
+    display: block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-bottom: 0.35rem;
+}
+
+.field input,
+.field textarea {
+    width: 100%;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.9rem;
+    padding: 0.75rem;
+    background: var(--input-bg);
+    color: var(--fg);
+    border: 2px solid var(--rule);
+    outline: none;
+}
+
+.field textarea { min-height: 100px; resize: vertical; }
+.field input:focus,
+.field textarea:focus { border-color: var(--fg); background: var(--bg); }
+
+/* ---- CODE ---- */
+code {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+}
+
+pre {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    background: var(--code-bg);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+}
+
+/* ---- DIVIDER ---- */
+.divider {
+    border: none;
+    border-top: 2px solid var(--rule);
+    margin: 2.5rem 0;
+}
+
+/* ---- FOOTER ---- */
+footer {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    color: var(--secondary);
+}
+
+footer a {
+    color: var(--fg);
+    text-decoration: none;
+    border-bottom: 1px solid var(--fg);
+}
+
+footer a:hover { opacity: 0.7; }
+
+/* ---- BUTTONS ---- */
+.btn {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 0.75rem 2rem;
+    background: var(--fg);
+    color: var(--bg);
+    border: 2px solid var(--fg);
+    cursor: pointer;
+    width: 100%;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ---- LISTS ---- */
+ol, ul {
+    margin-bottom: 1rem;
+    padding-left: 1.25rem;
+    color: var(--secondary);
+}
+
+li { margin-bottom: 0.4rem; }
+li strong { color: var(--fg); }
+
+/* ---- UTILITY ---- */
+.hidden { display: none; }
+.mono { font-family: "IBM Plex Mono", monospace; }
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 600px) {
+    .container { padding: 2rem 1.25rem; }
+    h1 { font-size: 1.75rem; }
+}

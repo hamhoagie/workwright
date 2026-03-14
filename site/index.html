@@ -15,69 +15,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
     <style>
-        :root {
-            --fg: #000;
-            --bg: #fff;
-            --secondary: #1a1a1a;
-            --rule: #000;
-            --code-bg: #f0f0f0;
-            --accept: #1a7a1a;
-            --reject: #7a1a1a;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --fg: #fff;
-                --bg: #0a0a0a;
-                --secondary: #e0e0e0;
-                --rule: #fff;
-                --code-bg: #151515;
-                --accept: #4ade80;
-                --reject: #f87171;
-            }
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: "IBM Plex Sans", sans-serif;
-            font-weight: 400;
-            background: var(--bg);
-            color: var(--fg);
-            line-height: 1.55;
-            min-height: 100vh;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        .container {
-            max-width: 720px;
-            margin: 0 auto;
-            padding: 3rem 2rem;
-        }
-
-        nav {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.85rem;
-            font-weight: 500;
-            margin-bottom: 2rem;
-            display: flex;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        nav a {
-            color: var(--fg);
-            text-decoration: none;
-            opacity: 0.5;
-        }
-
-        nav a:hover { opacity: 0.8; }
-        nav a.nav-active { opacity: 1; border-bottom: 2px solid var(--fg); }
-
-        header { margin-bottom: 3rem; }
-
-        h1 {
             font-size: 2.75rem;
             font-weight: 700;
             letter-spacing: -0.03em;
