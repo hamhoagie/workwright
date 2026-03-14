@@ -196,29 +196,33 @@ async fn run_wright(db: &Db, root: &PathBuf, llm: &LlmClient, task_id: &str) {
     db.update_task(&task).ok();
 
     let ws = Workspace::new(root);
-    let file_scope = task.scope.split(':').next().unwrap_or(&task.scope).to_string();
-    let file_content = ws.read_file(&file_scope).unwrap_or_default();
 
-    // Read taste guide from DB signals
+    // Collect all scoped files — support comma-separated multi-file scope
+    let raw_scope = task.scope.split(':').next().unwrap_or(&task.scope);
+    let file_paths: Vec<String> = raw_scope
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    // Read all files for context
+    let mut files: Vec<(String, String)> = Vec::new();
+    for path in &file_paths {
+        let content = ws.read_file(path).unwrap_or_default();
+        files.push((path.clone(), content));
+    }
+
+    // Read taste guide
     let guide = match db.all_signals() {
         Ok(signals) => build_taste_guide(&signals),
         Err(_) => String::new(),
     };
 
-    // Lock
-    if ws.locks.acquire(&file_scope, "wright-1", &task.intent).is_err() {
-        task.status = ww_workspace::TaskStatus::Failed;
-        task.defense = Some("Could not acquire lock".to_string());
-        db.update_task(&task).ok();
-        return;
-    }
-
-    // LLM call — get changes
-    let prompt = build_wright_prompt(&task, &file_content, &guide);
+    // LLM call
+    let prompt = build_wright_prompt(&task, &files, &guide);
     let llm_output = match llm.call(&prompt).await {
         Ok(text) => text.trim().to_string(),
         Err(e) => {
-            ws.locks.release(&file_scope, "wright-1").ok();
             task.status = ww_workspace::TaskStatus::Failed;
             task.defense = Some(format!("LLM error: {e}"));
             db.update_task(&task).ok();
@@ -226,33 +230,38 @@ async fn run_wright(db: &Db, root: &PathBuf, llm: &LlmClient, task_id: &str) {
         }
     };
 
-    // Apply diff or use as complete file (for new files)
-    let new_content = if file_content.is_empty() {
-        // New file — LLM output is the complete content
-        strip_fences(&llm_output)
-    } else if llm_output.contains("<<<SEARCH") {
-        // Diff mode — apply search/replace blocks
-        match apply_diff(&file_content, &llm_output) {
-            Ok(result) => result,
-            Err(e) => {
-                ws.locks.release(&file_scope, "wright-1").ok();
-                task.status = ww_workspace::TaskStatus::Failed;
-                task.defense = Some(format!("Diff apply failed: {e}"));
-                db.update_task(&task).ok();
-                tracing::warn!(task_id, error = %e, "diff apply failed");
-                return;
-            }
-        }
-    } else {
-        // Fallback — LLM returned complete file anyway
-        strip_fences(&llm_output)
-    };
+    // Parse multi-file output and apply changes
+    let file_changes = parse_multi_file_output(&llm_output, &files);
 
+    if file_changes.is_empty() {
+        task.status = ww_workspace::TaskStatus::Failed;
+        task.defense = Some("Wright produced no usable changes".to_string());
+        db.update_task(&task).ok();
+        return;
+    }
+
+    // Stage all files
+    let mut staged_paths = Vec::new();
+    for (path, content) in &file_changes {
+        if let Err(e) = ws.write_staged(path, content, "wright-1", &task.intent) {
+            tracing::warn!(path, error = %e, "failed to stage file");
+        } else {
+            staged_paths.push(path.clone());
+        }
+    }
+
+    if staged_paths.is_empty() {
+        task.status = ww_workspace::TaskStatus::Failed;
+        task.defense = Some("Failed to stage any files".to_string());
+        db.update_task(&task).ok();
+        return;
+    }
+
+    // Defense
     let defense_prompt = build_defense_prompt(&task, &llm_output);
     let defense = match llm.call(&defense_prompt).await {
         Ok(text) => text.trim().to_string(),
         Err(e) => {
-            ws.locks.release(&file_scope, "wright-1").ok();
             task.status = ww_workspace::TaskStatus::Failed;
             task.defense = Some(format!("Defense LLM error: {e}"));
             db.update_task(&task).ok();
@@ -260,16 +269,14 @@ async fn run_wright(db: &Db, root: &PathBuf, llm: &LlmClient, task_id: &str) {
         }
     };
 
-    // Stage
-    ws.write_staged(&file_scope, &new_content, "wright-1", &task.intent).ok();
-    ws.locks.release(&file_scope, "wright-1").ok();
-
     // Submit for review
     task.status = ww_workspace::TaskStatus::Review;
     task.defense = Some(defense);
+    // Store which files were changed
+    task.change_ids = staged_paths.clone();
     db.update_task(&task).ok();
 
-    tracing::info!(task_id, "wright completed");
+    tracing::info!(task_id, files = ?staged_paths, "wright completed");
 }
 
 #[derive(Deserialize)]
@@ -314,10 +321,22 @@ async fn post_crit(
     task.critted_by = Some(user.id.clone());
     task.critted_by_name = Some(user.display_name.clone());
 
-    let file_scope = task.scope.split(':').next().unwrap_or(&task.scope).to_string();
+    // Collect all file paths involved (change_ids now stores staged paths)
+    let raw_scope = task.scope.split(':').next().unwrap_or(&task.scope);
+    let mut file_paths: Vec<String> = raw_scope
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    // Also include any paths stored in change_ids (from multi-file wrights)
+    for cid in &task.change_ids {
+        if !file_paths.contains(cid) {
+            file_paths.push(cid.clone());
+        }
+    }
 
     if score > 0.0 {
-        // Accepted — promote staged file, deploy
+        // Accepted — promote ALL staged files, deploy
         task.status = ww_workspace::TaskStatus::Accepted;
         state.db.update_task(&task).ok();
 
@@ -325,12 +344,20 @@ async fn post_crit(
             state.db.update_trust(submitter_id, score * 0.1).ok();
         }
 
-        if state.workspace.promote(&file_scope).unwrap_or(false) {
+        let mut deployed = false;
+        for path in &file_paths {
+            if state.workspace.promote(path).unwrap_or(false) {
+                deployed = true;
+            }
+        }
+        if deployed {
             deploy_site(&state.root);
         }
     } else {
-        // Rejected — discard staged, add feedback, retry if under limit
-        state.workspace.discard(&file_scope);
+        // Rejected — discard ALL staged files, add feedback, retry
+        for path in &file_paths {
+            state.workspace.discard(path);
+        }
         task.feedback.push(body.reason.clone());
         task.attempts += 1;
 
@@ -692,14 +719,9 @@ fn build_taste_guide(signals: &[ww_workspace::TasteSignal]) -> String {
 
 fn build_wright_prompt(
     task: &ww_workspace::Task,
-    file_content: &str,
+    files: &[(String, String)],
     taste_guide: &str,
 ) -> String {
-    let file_display = if file_content.is_empty() {
-        "(new file — create from scratch)"
-    } else {
-        file_content
-    };
     let feedback_block = if task.feedback.is_empty() {
         String::new()
     } else {
@@ -708,53 +730,48 @@ fn build_wright_prompt(
             .map(|(i, f)| format!("  {}. {}", i + 1, f))
             .collect();
         format!(
-            "\n## Previous Attempts (rejected — learn from this feedback)\n\
-             This is attempt {}. Previous work was rejected for these reasons:\n{}\n\
-             Do NOT repeat the same mistakes. Address the feedback directly.\n",
+            "\n## Previous Attempts (rejected)\nAttempt {}. Rejected for:\n{}\nAddress the feedback directly.\n",
             task.attempts + 1,
             items.join("\n")
         )
     };
 
-    let is_new_file = file_content.is_empty();
+    let is_multi = files.len() > 1;
+    let all_new = files.iter().all(|(_, c)| c.is_empty());
 
-    if is_new_file {
-        format!(
-            r#"You are a wright — a craftsperson who works within a tradition.
+    // Build file content section
+    let files_block = files.iter().map(|(path, content)| {
+        if content.is_empty() {
+            format!("### {} (new file — create from scratch)", path)
+        } else {
+            format!("### {}\n```\n{}\n```", path, content)
+        }
+    }).collect::<Vec<_>>().join("\n\n");
 
-## Taste Guide
-{taste_guide}
-{feedback_block}
-## Your Task
-**Intent:** {intent}
-**Why:** {why}
-**Scope:** {scope}
+    let instructions = if all_new && !is_multi {
+        "Return the complete file content. No explanations, no markdown fences, just the code.".to_string()
+    } else if is_multi {
+        r#"You may need to create or edit MULTIPLE files. Use this format:
 
-This is a new file. Return the complete file content. No explanations, no markdown fences, just the code."#,
-            intent = task.intent,
-            why = task.why,
-            feedback_block = feedback_block,
-            scope = task.scope,
-        )
+===FILE: path/to/file===
+(for existing files, use SEARCH/REPLACE blocks)
+(for new files, write the complete content)
+===FILE: path/to/other===
+...
+
+SEARCH/REPLACE format for existing files:
+<<<SEARCH
+exact lines to find
+>>>REPLACE
+new lines
+<<<END
+
+Rules:
+- SEARCH must match the existing file exactly
+- For new files, just write the complete content after ===FILE: path===
+- Do NOT reproduce entire existing files — only the changes"#.to_string()
     } else {
-        format!(
-            r#"You are a wright — a craftsperson who works within a tradition.
-
-## Taste Guide
-{taste_guide}
-{feedback_block}
-## Your Task
-**Intent:** {intent}
-**Why:** {why}
-**Scope:** {scope}
-
-## Current File Content
-```
-{file_display}
-```
-
-## Instructions
-Return ONLY the changes needed. Use this exact format for each change:
+        r#"Return ONLY the changes needed. Use this exact format:
 
 <<<SEARCH
 exact lines from the current file to find
@@ -764,18 +781,36 @@ the new lines to replace them with
 
 Rules:
 - SEARCH block must match the current file exactly (including whitespace)
-- Include 2-3 lines of context around the change so the match is unambiguous
+- Include 2-3 lines of context around the change
 - Multiple changes: use multiple SEARCH/REPLACE blocks
 - Do NOT reproduce the entire file
-- Do NOT add explanations outside the blocks
-- If adding new code, use a SEARCH block that finds the insertion point (the lines just before where the new code goes)"#,
-            intent = task.intent,
-            why = task.why,
-            feedback_block = feedback_block,
-            scope = task.scope,
-            file_display = file_display,
-        )
-    }
+- If adding new code, SEARCH for the insertion point (lines just before)"#.to_string()
+    };
+
+    format!(
+        r#"You are a wright — a craftsperson who works within a tradition.
+
+## Taste Guide
+{taste_guide}
+{feedback_block}
+## Your Task
+**Intent:** {intent}
+**Why:** {why}
+**Scope:** {scope}
+
+## Files
+{files_block}
+
+## Instructions
+{instructions}"#,
+        taste_guide = taste_guide,
+        feedback_block = feedback_block,
+        intent = task.intent,
+        why = task.why,
+        scope = task.scope,
+        files_block = files_block,
+        instructions = instructions,
+    )
 }
 
 fn build_defense_prompt(task: &ww_workspace::Task, code: &str) -> String {
@@ -797,6 +832,73 @@ Why this form and not another. 2-4 sentences. Conceptual, not technical. Go:"#,
         why = task.why,
         code = truncated,
     )
+}
+
+/// Parse wright output that may contain changes to multiple files.
+/// Supports three formats:
+/// 1. `===FILE: path===` blocks with SEARCH/REPLACE or complete content
+/// 2. Single-file SEARCH/REPLACE (backward compatible)
+/// 3. Complete file content (for new files)
+fn parse_multi_file_output(
+    output: &str,
+    original_files: &[(String, String)],
+) -> Vec<(String, String)> {
+    let mut results = Vec::new();
+
+    // Check for multi-file format: ===FILE: path===
+    if output.contains("===FILE:") {
+        let blocks: Vec<&str> = output.split("===FILE:").collect();
+        for block in blocks.iter().skip(1) {
+            let Some((header, body)) = block.split_once("===") else { continue };
+            let path = header.trim().to_string();
+            let body = body.trim();
+
+            // Find original content for this file
+            let original = original_files
+                .iter()
+                .find(|(p, _)| *p == path)
+                .map(|(_, c)| c.as_str())
+                .unwrap_or("");
+
+            let content = if original.is_empty() {
+                // New file
+                strip_fences(body)
+            } else if body.contains("<<<SEARCH") {
+                match apply_diff(original, body) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        tracing::warn!(path, error = %e, "diff failed for file");
+                        continue;
+                    }
+                }
+            } else {
+                strip_fences(body)
+            };
+
+            results.push((path, content));
+        }
+    } else if original_files.len() == 1 {
+        // Single file — backward compatible
+        let (path, original) = &original_files[0];
+
+        let content = if original.is_empty() {
+            strip_fences(output)
+        } else if output.contains("<<<SEARCH") {
+            match apply_diff(original, output) {
+                Ok(result) => result,
+                Err(e) => {
+                    tracing::warn!(path, error = %e, "diff failed");
+                    return results;
+                }
+            }
+        } else {
+            strip_fences(output)
+        };
+
+        results.push((path.clone(), content));
+    }
+
+    results
 }
 
 fn compute_diff(original: &str, staged: &str) -> String {
