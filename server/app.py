@@ -454,7 +454,9 @@ def _run_wright_async(task_id):
 def _deploy_site():
     """Sync site directory to the web server."""
     import subprocess
-    dest = "billy@WW_DEPLOY_HOST"
+    dest = os.environ.get("WW_DEPLOY_HOST", "")
+    if not dest:
+        return
     web_root = "/var/www/workwright.xyz/html"
     try:
         # rsync all site files — only changed ones transfer
