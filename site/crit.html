@@ -582,31 +582,36 @@
         const hasStaged = data.has_staged;
         const showTab = hasOriginal && hasStaged ? 'staged' : (hasStaged ? 'staged' : 'original');
 
+        const hasDiff = data.diff && data.diff.length > 0;
+        const defaultView = hasDiff ? 'diff' : (hasStaged ? 'staged' : 'original');
+        const defaultContent = hasDiff ? data.diff : (hasStaged ? data.staged : data.original);
+
         section.innerHTML = `
             <div class="code-view-path">${esc(data.file_path)}</div>
-            ${(hasOriginal && hasStaged) ? `
-                <div class="code-tabs">
-                    <button class="code-tab ${showTab === 'staged' ? 'active' : ''}"
-                            onclick="switchTab('${taskId}', 'staged')">Proposed</button>
-                    <button class="code-tab ${showTab === 'original' ? 'active' : ''}"
-                            onclick="switchTab('${taskId}', 'original')">Original</button>
-                </div>
-            ` : `<div class="code-view-label">${hasStaged ? 'Proposed' : 'Current file'}</div>`}
-            <div class="code-content" id="code-content-${taskId}">${esc(hasStaged ? data.staged : data.original)}</div>
+            <div class="code-tabs">
+                ${hasDiff ? `<button class="code-tab ${defaultView === 'diff' ? 'active' : ''}"
+                        onclick="switchTab('${taskId}', 'diff')">Changes</button>` : ''}
+                ${hasStaged ? `<button class="code-tab ${defaultView === 'staged' ? 'active' : ''}"
+                        onclick="switchTab('${taskId}', 'staged')">Full file</button>` : ''}
+                ${hasOriginal ? `<button class="code-tab"
+                        onclick="switchTab('${taskId}', 'original')">Original</button>` : ''}
+            </div>
+            <div class="code-content" id="code-content-${taskId}">${esc(defaultContent)}</div>
         `;
 
-        // Store data for tab switching
         section.dataset.original = data.original || '';
         section.dataset.staged = data.staged || '';
+        section.dataset.diff = data.diff || '';
     }
 
     function switchTab(taskId, tab) {
         const section = document.getElementById(`code-${taskId}`);
         const content = document.getElementById(`code-content-${taskId}`);
-        content.textContent = tab === 'staged' ? section.dataset.staged : section.dataset.original;
+        const labels = { diff: 'Changes', staged: 'Full file', original: 'Original' };
+        content.textContent = section.dataset[tab] || '';
 
         section.querySelectorAll('.code-tab').forEach(btn => {
-            btn.classList.toggle('active', btn.textContent.trim() === (tab === 'staged' ? 'Proposed' : 'Original'));
+            btn.classList.toggle('active', btn.textContent.trim() === labels[tab]);
         });
     }
 

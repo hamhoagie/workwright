@@ -598,6 +598,13 @@ async fn get_diff(
         .flatten()
         .unwrap_or_default();
 
+    // Compute a simple line diff for the code view
+    let changes = if !staged.is_empty() && !original.is_empty() {
+        compute_diff(&original, &staged)
+    } else {
+        String::new()
+    };
+
     Json(serde_json::json!({
         "task_id": task.id,
         "scope": task.scope,
@@ -605,6 +612,7 @@ async fn get_diff(
         "original": original,
         "staged": staged,
         "has_staged": !staged.is_empty(),
+        "diff": changes,
     })).into_response()
 }
 
@@ -789,6 +797,65 @@ Why this form and not another. 2-4 sentences. Conceptual, not technical. Go:"#,
         why = task.why,
         code = truncated,
     )
+}
+
+fn compute_diff(original: &str, staged: &str) -> String {
+    let orig_lines: Vec<&str> = original.lines().collect();
+    let staged_lines: Vec<&str> = staged.lines().collect();
+    let mut output = Vec::new();
+    let mut i = 0;
+    let mut j = 0;
+
+    while i < orig_lines.len() || j < staged_lines.len() {
+        if i < orig_lines.len() && j < staged_lines.len() && orig_lines[i] == staged_lines[j] {
+            i += 1;
+            j += 1;
+        } else {
+            // Found a difference — collect context + changed lines
+            let ctx_start = i.saturating_sub(2);
+            for k in ctx_start..i {
+                output.push(format!("  {}", orig_lines[k]));
+            }
+
+            // Collect removed lines
+            let mut orig_end = i;
+            while orig_end < orig_lines.len() {
+                if j < staged_lines.len() && orig_lines.get(orig_end) == staged_lines.get(j) {
+                    break;
+                }
+                // Check if this line appears soon in staged (added, not removed)
+                let in_staged = staged_lines[j..].iter().take(20).any(|&l| l == orig_lines[orig_end]);
+                if in_staged { break; }
+                output.push(format!("- {}", orig_lines[orig_end]));
+                orig_end += 1;
+            }
+
+            // Collect added lines
+            while j < staged_lines.len() {
+                if orig_end < orig_lines.len() && staged_lines[j] == orig_lines[orig_end] {
+                    break;
+                }
+                output.push(format!("+ {}", staged_lines[j]));
+                j += 1;
+            }
+
+            // Context after
+            let ctx_end = orig_end.min(orig_lines.len()).saturating_add(2).min(orig_lines.len());
+            for k in orig_end..ctx_end {
+                if k < orig_lines.len() {
+                    output.push(format!("  {}", orig_lines[k]));
+                }
+            }
+
+            if !output.is_empty() && output.last().map(|l| l.as_str()) != Some("---") {
+                output.push("---".to_string());
+            }
+
+            i = orig_end;
+        }
+    }
+
+    output.join("\n")
 }
 
 fn apply_diff(original: &str, diff_output: &str) -> std::result::Result<String, String> {
