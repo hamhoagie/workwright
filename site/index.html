@@ -4,6 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Workwright</title>
+    <meta name="description" content="A crit system for building things with AI. The wright does the work and defends its choices. You judge the defense.">
+    <meta property="og:title" content="Workwright">
+    <meta property="og:description" content="A crit system for building things with AI. The wright does the work and defends its choices. You judge the defense.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://workwright.xyz">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Workwright">
+    <meta name="twitter:description" content="Brief → Defense → Crit. A protocol for transmitting taste.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,11 +21,9 @@
             --bg: #fff;
             --secondary: #1a1a1a;
             --rule: #000;
-            --input-bg: #f5f5f5;
             --code-bg: #f0f0f0;
             --accept: #1a7a1a;
             --reject: #7a1a1a;
-            color-scheme: light dark;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -26,35 +32,10 @@
                 --bg: #0a0a0a;
                 --secondary: #e0e0e0;
                 --rule: #fff;
-                --input-bg: #1a1a1a;
                 --code-bg: #151515;
                 --accept: #4ade80;
                 --reject: #f87171;
             }
-        }
-
-        :root[data-theme="light"] {
-            --fg: #000;
-            --bg: #fff;
-            --secondary: #1a1a1a;
-            --rule: #000;
-            --input-bg: #f5f5f5;
-            --code-bg: #f0f0f0;
-            --accept: #1a7a1a;
-            --reject: #7a1a1a;
-            color-scheme: light;
-        }
-
-        :root[data-theme="dark"] {
-            --fg: #fff;
-            --bg: #0a0a0a;
-            --secondary: #e0e0e0;
-            --rule: #fff;
-            --input-bg: #1a1a1a;
-            --code-bg: #151515;
-            --accept: #4ade80;
-            --reject: #f87171;
-            color-scheme: dark;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -65,8 +46,8 @@
             background: var(--bg);
             color: var(--fg);
             line-height: 1.55;
+            min-height: 100vh;
             -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
         }
 
         .container {
@@ -82,7 +63,7 @@
             margin-bottom: 2rem;
             display: flex;
             gap: 1.5rem;
-            align-items: center;
+            flex-wrap: wrap;
         }
 
         nav a {
@@ -94,27 +75,7 @@
         nav a:hover { opacity: 0.8; }
         nav a.nav-active { opacity: 1; border-bottom: 2px solid var(--fg); }
 
-        .theme-toggle {
-            margin-left: auto;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.85rem;
-            font-weight: 500;
-            color: var(--fg);
-            opacity: 0.5;
-            padding: 0;
-            line-height: 1;
-        }
-
-        .theme-toggle:hover { opacity: 0.8; }
-
-        /* ---- HEADER ---- */
-
-        header {
-            margin-bottom: 3rem;
-        }
+        header { margin-bottom: 3rem; }
 
         h1 {
             font-size: 2.75rem;
@@ -129,11 +90,7 @@
             color: var(--secondary);
         }
 
-        /* ---- SECTIONS ---- */
-
-        section {
-            margin-bottom: 3rem;
-        }
+        section { margin-bottom: 3rem; }
 
         h2 {
             font-size: 0.85rem;
@@ -141,59 +98,72 @@
             text-transform: uppercase;
             letter-spacing: 0.08em;
             margin-bottom: 1.25rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid var(--fg);
         }
 
-        /* ---- LIVE FEED ---- */
-
-        .feed-empty {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.9rem;
-            color: var(--secondary);
-            padding: 2rem 0;
-        }
+        /* ---- FEED ---- */
 
         .feed-item {
             padding: 1.25rem 0;
             border-bottom: 1px solid var(--rule);
         }
 
-        .feed-item:first-child {
-            border-top: 1px solid var(--rule);
-        }
+        .feed-item:first-child { border-top: 1px solid var(--rule); }
 
-        .feed-meta {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.8rem;
-            color: var(--secondary);
-            margin-bottom: 0.5rem;
+        .feed-header {
             display: flex;
             gap: 1rem;
             align-items: center;
+            flex-wrap: wrap;
+            cursor: pointer;
         }
 
         .feed-status {
-            display: inline-block;
             width: 8px;
             height: 8px;
             border-radius: 50%;
             background: var(--fg);
+            flex-shrink: 0;
         }
 
         .feed-status.pending { opacity: 0.3; }
-        .feed-status.active { background: #f59e0b; }
-        .feed-status.review { background: #3b82f6; }
+        .feed-status.active { opacity: 0.5; animation: pulse 1.5s infinite; }
+        .feed-status.review { opacity: 0.7; }
         .feed-status.accepted { background: var(--accept); }
         .feed-status.rejected { background: var(--reject); }
 
-        .feed-intent {
-            font-weight: 600;
-            margin-bottom: 0.25rem;
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
         }
 
-        .feed-why {
+        .feed-intent {
+            flex: 1;
+            font-weight: 500;
             font-size: 0.95rem;
+        }
+
+        .feed-scope {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.7rem;
+            opacity: 0.4;
+        }
+
+        .feed-details {
+            display: none;
+            padding: 1rem 0 0 1.5rem;
+        }
+
+        .feed-details.open { display: block; }
+
+        .feed-why {
+            font-size: 0.9rem;
+            color: var(--secondary);
+            margin-bottom: 0.75rem;
+        }
+
+        .feed-meta {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.75rem;
             color: var(--secondary);
             margin-bottom: 0.75rem;
         }
@@ -205,6 +175,7 @@
             padding: 1rem;
             background: var(--code-bg);
             margin-bottom: 0.75rem;
+            white-space: pre-wrap;
         }
 
         .feed-defense::before {
@@ -214,275 +185,32 @@
 
         .feed-score {
             font-family: "IBM Plex Mono", monospace;
-            font-size: 0.85rem;
-        }
-
-        .feed-score .positive { color: var(--accept); }
-        .feed-score .negative { color: var(--reject); }
-
-        .feed-item { cursor: pointer; }
-
-        .feed-detail {
-            display: none;
-            margin-top: 0.75rem;
-        }
-
-        .feed-item.expanded .feed-detail {
-            display: block;
-        }
-
-        .feed-diff {
-            font-family: "IBM Plex Mono", monospace;
             font-size: 0.8rem;
-            line-height: 1.5;
-            padding: 1rem;
-            background: var(--code-bg);
-            margin-bottom: 0.75rem;
-            max-height: 300px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
         }
 
-        .feed-expand-hint {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.75rem;
-            color: var(--secondary);
-            opacity: 0.6;
-        }
+        .feed-score.positive { color: var(--accept); }
+        .feed-score.negative { color: var(--reject); }
 
-        .preview-frame {
-            width: 100%;
-            height: 400px;
-            border: 2px solid var(--rule);
-            background: #fff;
-            margin-bottom: 0.75rem;
-        }
-
-        .preview-label {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.75rem;
-            font-weight: 500;
-            margin-bottom: 0.35rem;
-            color: var(--secondary);
-        }
-
-        .preview-tabs {
-            display: flex;
-            gap: 0;
-            margin-bottom: 0.5rem;
-        }
-
-        .preview-tabs button {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.75rem;
-            font-weight: 500;
-            padding: 0.35rem 1rem;
-            border: 2px solid var(--rule);
-            background: var(--bg);
-            color: var(--fg);
-            cursor: pointer;
-        }
-
-        .preview-tabs button:first-child { border-right: none; }
-        .preview-tabs button.active { background: var(--fg); color: var(--bg); }
-
-        /* ---- PROPOSE FORM ---- */
-
-        .propose-form {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .field label {
-            display: block;
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.8rem;
-            font-weight: 500;
-            margin-bottom: 0.35rem;
-        }
-
-        .field input,
-        .field textarea {
-            width: 100%;
+        .feed-empty {
             font-family: "IBM Plex Mono", monospace;
             font-size: 0.9rem;
-            padding: 0.75rem;
-            background: var(--input-bg);
+            color: var(--secondary);
+            padding: 2rem 0;
+        }
+
+        .feed-empty a {
             color: var(--fg);
-            border: 2px solid var(--rule);
-            outline: none;
+            border-bottom: 1px solid var(--fg);
+            text-decoration: none;
         }
 
-        .field textarea {
-            min-height: 80px;
-            resize: vertical;
-        }
-
-        .field input:focus,
-        .field textarea:focus {
-            border-color: var(--fg);
-            background: var(--bg);
-        }
-
-        button.submit {
-            font-family: "IBM Plex Sans", sans-serif;
-            font-weight: 600;
-            font-size: 0.95rem;
-            padding: 0.75rem 1.5rem;
-            background: var(--fg);
-            color: var(--bg);
-            border: 2px solid var(--fg);
-            cursor: pointer;
-            align-self: flex-start;
-        }
-
-        button.submit:hover {
-            background: var(--bg);
-            color: var(--fg);
-        }
-
-        /* ---- TASTE GUIDE ---- */
+        /* ---- TASTE ---- */
 
         .taste-guide {
             font-family: "IBM Plex Mono", monospace;
             font-size: 0.85rem;
             line-height: 1.6;
-            padding: 1.5rem;
-            background: var(--code-bg);
-        }
-
-        .taste-guide h3 {
-            font-family: "IBM Plex Sans", sans-serif;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 0.75rem;
-        }
-
-        .taste-guide ul {
-            list-style: none;
-            margin-bottom: 1rem;
-        }
-
-        .taste-guide li::before {
-            content: "→ ";
-        }
-
-        /* ---- CRIT PANEL ---- */
-
-        .crit-panel {
-            padding: 1rem;
-            border: 2px solid var(--rule);
-            margin-top: 0.75rem;
-            display: none;
-        }
-
-        .crit-panel.open {
-            display: block;
-        }
-
-        .crit-actions {
-            display: flex;
-            gap: 0.75rem;
-            align-items: center;
-            margin-top: 0.75rem;
-        }
-
-        .crit-actions input {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.85rem;
-            padding: 0.5rem;
-            background: var(--input-bg);
-            color: var(--fg);
-            border: 2px solid var(--rule);
-            flex: 1;
-        }
-
-        .crit-btn {
-            font-family: "IBM Plex Mono", monospace;
-            font-weight: 500;
-            font-size: 0.85rem;
-            padding: 0.5rem 1rem;
-            border: 2px solid var(--rule);
-            background: var(--bg);
-            color: var(--fg);
-            cursor: pointer;
-        }
-
-        .crit-btn:hover {
-            background: var(--fg);
-            color: var(--bg);
-        }
-
-        /* ---- SCOPE TOGGLE ---- */
-
-        .scope-toggle {
-            display: flex;
-            gap: 0;
-        }
-
-        .scope-btn {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.85rem;
-            font-weight: 500;
-            padding: 0.5rem 1.25rem;
-            border: 2px solid var(--rule);
-            background: var(--bg);
-            color: var(--fg);
-            cursor: pointer;
-        }
-
-        .scope-btn:first-child {
-            border-right: none;
-        }
-
-        .scope-btn.active {
-            background: var(--fg);
-            color: var(--bg);
-        }
-
-        .scope-btn:hover:not(.active) {
-            opacity: 0.7;
-        }
-
-        .feed-scope-tag {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.7rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            padding: 0.15em 0.4em;
-            border: 1px solid var(--fg);
-            display: inline-block;
-        }
-
-        /* ---- PRINCIPLES ---- */
-
-        .principles {
-            margin-bottom: 0;
-        }
-
-        .principle {
-            padding: 1rem 0;
-            border-bottom: 1px solid var(--rule);
-        }
-
-        .principle:first-child {
-            border-top: 1px solid var(--rule);
-        }
-
-        .principle strong {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 0.2rem;
-        }
-
-        .principle span {
-            color: var(--secondary);
-            font-size: 0.95rem;
+            white-space: pre-wrap;
         }
 
         /* ---- FOOTER ---- */
@@ -506,7 +234,122 @@
 
         footer a:hover { opacity: 0.7; }
 
-        /* ---- RESPONSIVE ---- */
-
         @media (max-width: 600px) {
-            .container { padding: 2rem
+            .container { padding: 2rem 1.25rem; }
+            h1 { font-size: 2rem; }
+            .feed-scope { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <nav>
+            <a href="/" class="nav-active">Feed</a>
+            <a href="/brief">Brief</a>
+            <a href="/crit">Crit</a>
+            <a href="/register">Register</a>
+            <a href="/about">About</a>
+            <a href="https://github.com/hamhoagie/workwright">Source</a>
+        </nav>
+
+        <header>
+            <h1>Workwright</h1>
+            <p>Brief → Defense → Crit</p>
+        </header>
+
+        <section>
+            <h2>Live Feed</h2>
+            <div id="feed">
+                <div class="feed-empty">Loading...</div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Taste Guide</h2>
+            <div class="taste-guide" id="taste-guide">Loading...</div>
+        </section>
+
+        <footer>
+            <span>Workwright — March 2026</span>
+            <a href="/about">What is this?</a>
+        </footer>
+
+    </div>
+
+    <script>
+    const API = '/api';
+
+    async function loadFeed() {
+        const el = document.getElementById('feed');
+        try {
+            const resp = await fetch(`${API}/tasks`);
+            const tasks = await resp.json();
+
+            if (!tasks.length) {
+                el.innerHTML = `<div class="feed-empty">No tasks yet. <a href="/brief">Brief a wright</a> to get started.</div>`;
+                return;
+            }
+
+            el.innerHTML = tasks.map((t, i) => {
+                const score = t.taste_score;
+                const scoreClass = score > 0 ? 'positive' : score < 0 ? 'negative' : '';
+                const submitter = t.submitted_by_name || t.agent_id || '';
+                const time = relativeTime(t.created);
+
+                return `
+                <div class="feed-item">
+                    <div class="feed-header" onclick="toggle(${i})">
+                        <div class="feed-status ${t.status}"></div>
+                        <div class="feed-intent">${esc(t.intent)}</div>
+                        <div class="feed-scope">${esc(t.scope)}</div>
+                    </div>
+                    <div class="feed-details" id="details-${i}">
+                        <div class="feed-why">${esc(t.why)}</div>
+                        <div class="feed-meta">${submitter ? esc(submitter) + ' · ' : ''}${time} · ${t.status}</div>
+                        ${t.defense ? `<div class="feed-defense">${esc(t.defense)}</div>` : ''}
+                        ${score !== null ? `<div class="feed-score ${scoreClass}">Score: ${score > 0 ? '+' : ''}${score}${t.taste_note ? ' — ' + esc(t.taste_note) : ''}</div>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            el.innerHTML = `<div class="feed-empty">Could not load feed.</div>`;
+        }
+    }
+
+    async function loadTaste() {
+        const el = document.getElementById('taste-guide');
+        try {
+            const resp = await fetch(`${API}/taste`);
+            const data = await resp.json();
+            el.textContent = data.text || 'No taste signals yet.';
+        } catch (e) {
+            el.textContent = 'Could not load taste guide.';
+        }
+    }
+
+    function toggle(i) {
+        document.getElementById(`details-${i}`).classList.toggle('open');
+    }
+
+    function relativeTime(ts) {
+        const diff = Date.now() / 1000 - ts;
+        if (diff < 60) return 'just now';
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+        return new Date(ts * 1000).toLocaleDateString();
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    loadFeed();
+    loadTaste();
+    </script>
+</body>
+</html>
