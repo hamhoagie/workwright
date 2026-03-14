@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Workwright — Crit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --fg: #000;
+            --bg: #fff;
+            --secondary: #1a1a1a;
+            --rule: #000;
+            --input-bg: #f5f5f5;
+            --code-bg: #f0f0f0;
+            --accept: #1a7a1a;
+            --reject: #7a1a1a;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --fg: #fff;
+                --bg: #0a0a0a;
+                --secondary: #e0e0e0;
+                --rule: #fff;
+                --input-bg: #1a1a1a;
+                --code-bg: #151515;
+                --accept: #4ade80;
+                --reject: #f87171;
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "IBM Plex Sans", sans-serif;
+            font-weight: 400;
+            background: var(--bg);
+            color: var(--fg);
+            line-height: 1.55;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        nav {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        nav a {
+            color: var(--fg);
+            text-decoration: none;
+            opacity: 0.5;
+        }
+
+        nav a:hover { opacity: 0.8; }
+        nav a.nav-active { opacity: 1; border-bottom: 2px solid var(--fg); }
+
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--secondary);
+            margin-bottom: 2rem;
+        }
+
+        /* Queue */
+        .queue-empty {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.9rem;
+            color: var(--secondary);
+            padding: 2rem 0;
+        }
+
+        .queue-item {
+            border: 2px solid var(--rule);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .queue-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .task-intent {
+            font-weight: 600;
+            font-size: 1rem;
+            flex: 1;
+        }
+
+        .task-scope {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.75rem;
+            opacity: 0.5;
+            white-space: nowrap;
+        }
+
+        .task-why {
+            font-size: 0.9rem;
+            color: var(--secondary);
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--rule);
+        }
+
+        .task-meta {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.75rem;
+            color: var(--secondary);
+            margin-bottom: 1rem;
+        }
+
+        /* Defense */
+        .defense-label {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 0.35rem;
+        }
+
+        .defense-text {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            padding: 1rem;
+            background: var(--code-bg);
+            margin-bottom: 1.25rem;
+            white-space: pre-wrap;
+        }
+
+        /* Preview */
+        .preview-toggle {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.8rem;
+            background: none;
+            border: 1px solid var(--rule);
+            color: var(--fg);
+            padding: 0.35rem 0.75rem;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+
+        .preview-toggle:hover { background: var(--input-bg); }
+
+        .preview-frame {
+            width: 100%;
+            height: 400px;
+            border: 2px solid var(--rule);
+            background: #fff;
+            margin-bottom: 1.25rem;
+            display: none;
+        }
+
+        /* Score */
+        .crit-form {
+            border-top: 2px solid var(--rule);
+            padding-top: 1.25rem;
+        }
+
+        .score-section {
+            margin-bottom: 1rem;
+        }
+
+        .score-label {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .score-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .score-btn {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--rule);
+            background: none;
+            color: var(--fg);
+            cursor: pointer;
+        }
+
+        .score-btn:hover { background: var(--input-bg); }
+        .score-btn.selected { background: var(--fg); color: var(--bg); }
+        .score-btn.accept { border-color: var(--accept); }
+        .score-btn.accept.selected { background: var(--accept); color: #fff; border-color: var(--accept); }
+        .score-btn.reject { border-color: var(--reject); }
+        .score-btn.reject.selected { background: var(--reject); color: #fff; border-color: var(--reject); }
+
+        .score-value {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.8rem;
+            color: var(--secondary);
+            margin-top: 0.35rem;
+        }
+
+        .reason-field {
+            margin-bottom: 1.25rem;
+        }
+
+        .reason-field label {
+            display: block;
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 0.35rem;
+        }
+
+        .reason-field textarea {
+            width: 100%;
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.9rem;
+            padding: 0.75rem;
+            background: var(--input-bg);
+            color: var(--fg);
+            border: 2px solid var(--rule);
+            outline: none;
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .reason-field textarea:focus {
+            border-color: var(--fg);
+            background: var(--bg);
+        }
+
+        .submit-crit {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 0.75rem 2rem;
+            background: var(--fg);
+            color: var(--bg);
+            border: 2px solid var(--fg);
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .submit-crit:hover { opacity: 0.85; }
+        .submit-crit:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .result {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+            padding: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .result.ok { color: var(--accept); }
+        .result.err { color: var(--reject); }
+
+        .no-auth {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.9rem;
+            padding: 2rem 0;
+        }
+
+        .no-auth a {
+            color: var(--fg);
+            border-bottom: 1px solid var(--fg);
+            text-decoration: none;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 2rem 1.25rem; }
+            h1 { font-size: 1.75rem; }
+            .queue-item { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <nav>
+            <a href="/">Feed</a>
+            <a href="/brief">Brief</a>
+            <a href="/crit" class="nav-active">Crit</a>
+            <a href="/register">Register</a>
+            <a href="/about">About</a>
+            <a href="https://github.com/hamhoagie/workwright">Source</a>
+        </nav>
+
+        <h1>Crit</h1>
+        <p class="subtitle">Read the defense. Score the work. Your reason matters more than the number.</p>
+
+        <div id="auth-gate">
+            <div class="no-auth">
+                Checking authentication...
+            </div>
+        </div>
+
+        <div id="crit-queue" style="display: none;"></div>
+
+    </div>
+
+    <script>
+    const API = '/api';
+    const token = localStorage.getItem('ww_token');
+
+    async function init() {
+        const gate = document.getElementById('auth-gate');
+        const queue = document.getElementById('crit-queue');
+
+        if (!token) {
+            gate.innerHTML = `<div class="no-auth">You need a token to crit. <a href="/register">Register</a> first.</div>`;
+            return;
+        }
+
+        // Check if user is admin
+        const meResp = await fetch(`${API}/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!meResp.ok) {
+            gate.innerHTML = `<div class="no-auth">Invalid token. <a href="/register">Register</a> to get a new one.</div>`;
+            return;
+        }
+
+        const me = await meResp.json();
+        if (me.role !== 'admin') {
+            gate.innerHTML = `<div class="no-auth">Only admins can crit (for now). You're <strong>${me.display_name}</strong> (${me.role}, trust ${me.trust_score.toFixed(2)}).</div>`;
+            return;
+        }
+
+        // Authenticated admin — show the queue
+        gate.style.display = 'none';
+        queue.style.display = 'block';
+        loadQueue();
+    }
+
+    async function loadQueue() {
+        const queue = document.getElementById('crit-queue');
+        const resp = await fetch(`${API}/tasks`);
+        const tasks = await resp.json();
+        const review = tasks.filter(t => t.status === 'review');
+
+        if (review.length === 0) {
+            queue.innerHTML = `<div class="queue-empty">Nothing to crit. All caught up.</div>`;
+            return;
+        }
+
+        queue.innerHTML = review.map(task => renderTask(task)).join('');
+    }
+
+    function renderTask(task) {
+        const defense = task.defense || 'No defense provided.';
+        const submitter = task.submitted_by_name || task.agent_id || 'unknown';
+        const time = relativeTime(task.created);
+        const hasPreview = task.change_ids && task.change_ids.length > 0 &&
+                          task.scope.includes('.html');
+        const previewId = task.change_ids?.[0] || '';
+
+        return `
+        <div class="queue-item" id="task-${task.id}">
+            <div class="queue-item-header">
+                <div class="task-intent">${esc(task.intent)}</div>
+                <div class="task-scope">${esc(task.scope)}</div>
+            </div>
+            <div class="task-why">${esc(task.why)}</div>
+            <div class="task-meta">by ${esc(submitter)} · ${time}</div>
+
+            <div class="defense-label">Defense</div>
+            <div class="defense-text">${esc(defense)}</div>
+
+            ${hasPreview ? `
+                <button class="preview-toggle" onclick="togglePreview('${task.id}', '${previewId}')">
+                    Show preview
+                </button>
+                <iframe class="preview-frame" id="preview-${task.id}"></iframe>
+            ` : ''}
+
+            <div class="crit-form">
+                <div class="score-section">
+                    <div class="score-label">Score</div>
+                    <div class="score-buttons">
+                        <button class="score-btn reject" onclick="setScore('${task.id}', -1.0)">−1.0</button>
+                        <button class="score-btn reject" onclick="setScore('${task.id}', -0.5)">−0.5</button>
+                        <button class="score-btn" onclick="setScore('${task.id}', 0.5)">+0.5</button>
+                        <button class="score-btn accept" onclick="setScore('${task.id}', 0.7)">+0.7</button>
+                        <button class="score-btn accept" onclick="setScore('${task.id}', 0.85)">+0.85</button>
+                        <button class="score-btn accept" onclick="setScore('${task.id}', 1.0)">+1.0</button>
+                    </div>
+                    <div class="score-value" id="score-display-${task.id}">No score selected</div>
+                </div>
+
+                <div class="reason-field">
+                    <label>Reason (why this score — this becomes the taste signal)</label>
+                    <textarea id="reason-${task.id}" placeholder="What makes this work good or bad? Be specific."></textarea>
+                </div>
+
+                <button class="submit-crit" id="submit-${task.id}" disabled onclick="submitCrit('${task.id}')">
+                    Select a score to crit
+                </button>
+
+                <div id="result-${task.id}"></div>
+            </div>
+        </div>`;
+    }
+
+    const scores = {};
+
+    function setScore(taskId, score) {
+        scores[taskId] = score;
+        // Update UI
+        const display = document.getElementById(`score-display-${taskId}`);
+        const btn = document.getElementById(`submit-${taskId}`);
+        display.textContent = `Score: ${score > 0 ? '+' : ''}${score}`;
+        btn.disabled = false;
+        btn.textContent = score > 0 ? `Accept (+${score})` : `Reject (${score})`;
+
+        // Highlight selected button
+        const buttons = document.querySelectorAll(`#task-${taskId} .score-btn`);
+        buttons.forEach(b => {
+            const val = parseFloat(b.textContent.replace('−', '-'));
+            b.classList.toggle('selected', val === score);
+        });
+    }
+
+    function togglePreview(taskId, changeId) {
+        const frame = document.getElementById(`preview-${taskId}`);
+        if (frame.style.display === 'block') {
+            frame.style.display = 'none';
+        } else {
+            frame.src = `${API}/preview/${changeId}`;
+            frame.style.display = 'block';
+        }
+    }
+
+    async function submitCrit(taskId) {
+        const score = scores[taskId];
+        const reason = document.getElementById(`reason-${taskId}`).value.trim();
+        const result = document.getElementById(`result-${taskId}`);
+        const btn = document.getElementById(`submit-${taskId}`);
+
+        if (score === undefined) return;
+        if (!reason) {
+            result.className = 'result err';
+            result.textContent = 'Reason is required. The reason IS the taste signal.';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+
+        const resp = await fetch(`${API}/crit`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ task_id: taskId, score, reason })
+        });
+
+        if (resp.ok) {
+            result.className = 'result ok';
+            result.textContent = score > 0
+                ? `Accepted (+${score}). Taste signal recorded.`
+                : `Rejected (${score}). Taste signal recorded.`;
+            btn.textContent = 'Done';
+
+            // Fade out after a moment
+            setTimeout(() => {
+                const el = document.getElementById(`task-${taskId}`);
+                if (el) el.style.opacity = '0.3';
+            }, 1500);
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            result.className = 'result err';
+            result.textContent = err.error || 'Crit failed.';
+            btn.disabled = false;
+            btn.textContent = 'Retry';
+        }
+    }
+
+    function relativeTime(ts) {
+        const diff = Date.now() / 1000 - ts;
+        if (diff < 60) return 'just now';
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+        return new Date(ts * 1000).toLocaleDateString();
+    }
+
+    function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    init();
+    </script>
+</body>
+</html>
