@@ -1,9 +1,1 @@
-{
-  "README.md": {
-    "path": "README.md",
-    "agent_id": "wright-1",
-    "intent": "Test brief from Rust server",
-    "acquired": 1773507111.653386,
-    "expires": 1773507411.653386
-  }
-}
+{}

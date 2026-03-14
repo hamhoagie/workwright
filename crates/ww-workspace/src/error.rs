@@ -18,6 +18,9 @@ pub enum WorkspaceError {
 
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+
+    #[error("database error: {0}")]
+    Db(#[from] rusqlite::Error),
 }
 
 pub type Result<T> = std::result::Result<T, WorkspaceError>;
