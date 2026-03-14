@@ -10,3 +10,10 @@ node_modules/
 
 # Rust
 target/
+
+# Workspace data (tokens, db, user data)
+.workwright/users.jsonl
+.workwright/workwright.db
+.workwright/workwright.db-shm
+.workwright/workwright.db-wal
+.workwright/staging/

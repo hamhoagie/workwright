@@ -1,26 +1,15 @@
-Looking at this file, I need to add rate limiting middleware for two write endpoints: `POST /api/tasks` (10/hour) and `POST /api/register` (3/hour). The feed stays open.
-
-The right approach: in-process IP-keyed counters with a sliding window. No external dependency. The limiter lives in `AppState` — same pattern as everything else. Two separate limiters because the limits differ. Extract the IP from `X-Forwarded-For` first, fall back to the connection address — but axum's `ConnectInfo` requires that I change `axum::serve` slightly.
-
-Actually, looking at what's available: axum's `ConnectInfo` extractor gives the peer address. I can add that without pulling in new crates. The rate limiter itself: `DashMap` would be clean but it's not a current dependency. A `Mutex<HashMap>` is honest about what it is — process-local state with lock contention — and contention on a rate limit check is not a real cost.
-
-The limiter: bucket per IP, store (count, window_start). On each check, if `now - window_start > 3600`, reset. If `count >= limit`, reject 429. Simple, correct, no theater.
-
-```rust
 //! Workwright API server — Rust + SQLite.
 //!
 //! Same endpoints, same behavior. Single binary, single db file.
 //! Reads existing JSONL data on first run (auto-migration).
 
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
-use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::path::PathBuf;
 
 use axum::{
     Router,
     routing::{get, post},
-    extract::{ConnectInfo, Json, Path as AxumPath, State},
+    extract::{Json, Path, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
@@ -32,69 +21,14 @@ use ww_workspace::{Db, User, Workspace};
 use ww_wright::Wright;
 use ww_wright::llm::LlmClient;
 
-// --- Rate limiting ---
-
-/// A sliding-window rate limiter keyed by IP string.
-/// Window resets per IP when an hour has elapsed since first request in window.
-struct RateLimiter {
-    /// Map from IP → (count_in_window, window_start_secs)
-    buckets: Mutex<HashMap<String, (u32, f64)>>,
-    limit: u32,
-    window_secs: f64,
-}
-
-impl RateLimiter {
-    fn new(limit: u32, window_secs: f64) -> Self {
-        Self {
-            buckets: Mutex::new(HashMap::new()),
-            limit,
-            window_secs,
-        }
-    }
-
-    /// Returns true if the request is allowed, false if rate limit exceeded.
-    fn check(&self, ip: &str) -> bool {
-        let now = now_secs();
-        let mut buckets = self.buckets.lock().unwrap();
-        let entry = buckets.entry(ip.to_string()).or_insert((0, now));
-        if now - entry.1 > self.window_secs {
-            // Window expired — reset
-            *entry = (1, now);
-            return true;
-        }
-        if entry.0 >= self.limit {
-            return false;
-        }
-        entry.0 += 1;
-        true
-    }
-}
-
-// --- App state ---
-
 struct AppState {
     root: PathBuf,
     db: Db,
     workspace: Workspace,
     llm: Option<LlmClient>,
-    /// Rate limiter for POST /api/tasks — 10 per hour per IP.
-    brief_limiter: RateLimiter,
-    /// Rate limiter for POST /api/register — 3 per hour per IP.
-    register_limiter: RateLimiter,
 }
 
 type SharedState = Arc<AppState>;
-
-/// Extract the client IP from X-Forwarded-For (first hop) or fall back to
-/// the direct peer address. Returns a string suitable for use as a limiter key.
-fn client_ip(headers: &HeaderMap, addr: &ConnectInfo<SocketAddr>) -> String {
-    headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| addr.0.ip().to_string())
-}
 
 #[tokio::main]
 async fn main() {
@@ -140,8 +74,6 @@ async fn main() {
         workspace: Workspace::new(&root),
         llm,
         root: root.clone(),
-        brief_limiter: RateLimiter::new(10, 3600.0),
-        register_limiter: RateLimiter::new(3, 3600.0),
     });
 
     let app = Router::new()
@@ -155,9 +87,7 @@ async fn main() {
         .route("/api/preview/{change_id}", get(get_preview))
         .fallback_service(ServeDir::new(&site_dir))
         .layer(CorsLayer::permissive())
-        .with_state(state)
-        // ConnectInfo must wrap the whole service so extractors can see it
-        .into_make_service_with_connect_info::<SocketAddr>();
+        .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
     tracing::info!("Workwright API on http://{addr}");
@@ -195,19 +125,9 @@ struct PostTaskReq {
 
 async fn post_task(
     State(state): State<SharedState>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Json(body): Json<PostTaskReq>,
 ) -> impl IntoResponse {
-    let ip = client_ip(&headers, &ConnectInfo(addr));
-    if !state.brief_limiter.check(&ip) {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(serde_json::json!({"error": "rate limit exceeded — 10 briefs per hour"})),
-        )
-            .into_response();
-    }
-
     let user = match resolve_user(&headers, &state.db) {
         Some(u) => u,
         None => return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "unauthorized"}))).into_response(),
@@ -367,3 +287,319 @@ async fn post_crit(
         ww_workspace::TaskStatus::Accepted
     } else {
         ww_workspace::TaskStatus::Rejected
+    };
+    task.taste_score = Some(score);
+    task.taste_note = Some(body.reason);
+    task.critted_by = Some(user.id.clone());
+    task.critted_by_name = Some(user.display_name.clone());
+    state.db.update_task(&task).ok();
+
+    // Trust flows to submitter
+    if let Some(ref submitter_id) = task.submitted_by {
+        state.db.update_trust(submitter_id, score * 0.1).ok();
+    }
+
+    // Promote or discard staged files
+    let file_scope = task.scope.split(':').next().unwrap_or(&task.scope);
+    if score > 0.0 {
+        if state.workspace.promote(file_scope).unwrap_or(false) { deploy_site(&state.root); }
+    } else {
+        state.workspace.discard(file_scope);
+    }
+
+    Json(serde_json::json!({"ok": true, "score": score})).into_response()
+}
+
+fn deploy_site(root: &std::path::Path) {
+    let site_dir = root.join("site");
+    let dest = std::env::var("WW_DEPLOY_HOST").unwrap_or_default();
+    let web_root = std::env::var("WW_DEPLOY_PATH")
+        .unwrap_or_else(|_| "/var/www/workwright.xyz/html".to_string());
+
+    if dest.is_empty() {
+        return;
+    }
+
+    std::thread::spawn(move || {
+        let rsync = std::process::Command::new("rsync")
+            .args(["-az", "--delete"])
+            .arg(format!("{}/", site_dir.display()))
+            .arg(format!("{dest}:/tmp/ww-site/"))
+            .output();
+
+        match rsync {
+            Ok(out) if out.status.success() => {
+                let mv = std::process::Command::new("ssh")
+                    .args([&dest, &format!("sudo rsync -a /tmp/ww-site/ {web_root}/")])
+                    .output();
+                match mv {
+                    Ok(out) if out.status.success() => tracing::info!("deployed to {dest}"),
+                    _ => tracing::warn!("deploy mv failed"),
+                }
+            }
+            _ => tracing::warn!("rsync failed"),
+        }
+    });
+}
+
+async fn get_taste(State(state): State<SharedState>) -> impl IntoResponse {
+    match (state.db.all_signals(), state.db.signal_count()) {
+        (Ok(signals), Ok(count)) => {
+            let guide = build_taste_guide(&signals);
+            Json(serde_json::json!({
+                "text": guide,
+                "signal_count": count,
+            }))
+            .into_response()
+        }
+        _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+async fn get_users(State(state): State<SharedState>) -> impl IntoResponse {
+    match state.db.all_users() {
+        Ok(users) => {
+            let public: Vec<serde_json::Value> = users
+                .iter()
+                .map(|u| {
+                    serde_json::json!({
+                        "id": u.id,
+                        "display_name": u.display_name,
+                        "trust_score": u.trust_score,
+                        "role": u.role,
+                    })
+                })
+                .collect();
+            Json(public).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+async fn get_me(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    match resolve_user(&headers, &state.db) {
+        Some(u) => Json(serde_json::json!({
+            "id": u.id,
+            "email": u.email,
+            "display_name": u.display_name,
+            "trust_score": u.trust_score,
+            "role": u.role,
+        }))
+        .into_response(),
+        None => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "unauthorized"}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct RegisterReq {
+    email: String,
+    display_name: String,
+}
+
+async fn post_register(
+    State(state): State<SharedState>,
+    Json(body): Json<RegisterReq>,
+) -> impl IntoResponse {
+    let user = User {
+        id: uuid::Uuid::new_v4().to_string()[..8].to_string(),
+        email: body.email,
+        display_name: body.display_name,
+        token: generate_token(),
+        trust_score: 0.0,
+        role: "participant".to_string(),
+        created: now_secs(),
+    };
+
+    match state.db.create_user(&user) {
+        Ok(()) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({
+                "id": user.id,
+                "display_name": user.display_name,
+                "token": user.token,
+                "trust_score": user.trust_score,
+                "role": user.role,
+            })),
+        )
+            .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn get_preview(
+    State(state): State<SharedState>,
+    Path(change_id): Path<String>,
+) -> impl IntoResponse {
+    if let Ok(Some(change)) = state.workspace.changelog.get(&change_id) {
+        if change.path.ends_with(".html") {
+            if let Ok(Some(content)) = state.workspace.staging.read(&change.path) {
+                return axum::response::Html(content).into_response();
+            }
+            if let Some(content) = state.workspace.read_file(&change.path) {
+                return axum::response::Html(content).into_response();
+            }
+        }
+    }
+    StatusCode::NOT_FOUND.into_response()
+}
+
+// --- Helpers ---
+
+fn build_taste_guide(signals: &[ww_workspace::TasteSignal]) -> String {
+    if signals.is_empty() {
+        return "No taste signals yet. The guide emerges from crit.".to_string();
+    }
+    let mut guide = format!(
+        "## Taste Guide (learned from human feedback)\n\n*Based on {} taste signals.*\n\n",
+        signals.len()
+    );
+    let accepted: Vec<_> = signals.iter().filter(|s| s.score > 0.0).collect();
+    let rejected: Vec<_> = signals.iter().filter(|s| s.score <= 0.0).collect();
+    if !accepted.is_empty() {
+        guide.push_str("**Extracted principles (from accepted work):**\n");
+        for s in &accepted {
+            guide.push_str(&format!("- {}\n", s.reason));
+        }
+        guide.push('\n');
+    }
+    if !rejected.is_empty() {
+        guide.push_str("**Anti-patterns (from rejected work):**\n");
+        for s in &rejected {
+            guide.push_str(&format!("- {}\n", s.reason));
+        }
+    }
+    guide
+}
+
+fn build_wright_prompt(
+    task: &ww_workspace::Task,
+    file_content: &str,
+    taste_guide: &str,
+) -> String {
+    let file_display = if file_content.is_empty() {
+        "(new file — create from scratch)"
+    } else {
+        file_content
+    };
+    format!(
+        r#"You are a wright — a craftsperson who works within a tradition.
+
+## Taste Guide
+{taste_guide}
+
+## Your Task
+**Intent:** {intent}
+**Why:** {why}
+**Scope:** {scope}
+
+## Target File Content
+```
+{file_display}
+```
+
+## Instructions
+Make the change described in the intent. Follow the principles. Return the complete file content — no explanations, no markdown fences, just the code."#,
+        intent = task.intent,
+        why = task.why,
+        scope = task.scope,
+    )
+}
+
+fn build_defense_prompt(task: &ww_workspace::Task, code: &str) -> String {
+    let truncated = if code.len() > 3000 { &code[..3000] } else { code };
+    format!(
+        r#"You just completed a piece of work. Now defend it.
+
+**Task:** {intent}
+**Why it was needed:** {why}
+
+**What you produced:**
+```
+{code}
+```
+
+Defend your choices. Not what you did — the diff shows that.
+Why this form and not another. 2-4 sentences. Conceptual, not technical. Go:"#,
+        intent = task.intent,
+        why = task.why,
+        code = truncated,
+    )
+}
+
+fn strip_fences(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let start = if lines.first().is_some_and(|l| l.starts_with("```")) { 1 } else { 0 };
+    let end = if lines.last().is_some_and(|l| l.trim() == "```") { lines.len() - 1 } else { lines.len() };
+    lines[start..end].join("\n")
+}
+
+fn generate_token() -> String {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    let s = RandomState::new();
+    let mut h = s.build_hasher();
+    h.write_u128(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    );
+    let a = h.finish();
+    let mut h2 = s.build_hasher();
+    h2.write_u64(a);
+    let b = h2.finish();
+    format!("{:x}{:x}", a, b)
+}
+
+fn now_secs() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
+}
+
+// --- JSON types ---
+
+#[derive(Serialize)]
+struct TaskJson {
+    id: String,
+    intent: String,
+    why: String,
+    scope: String,
+    status: String,
+    created: f64,
+    agent_id: Option<String>,
+    defense: Option<String>,
+    change_ids: Vec<String>,
+    taste_score: Option<f64>,
+    taste_note: Option<String>,
+    submitted_by: Option<String>,
+    submitted_by_name: Option<String>,
+    critted_by: Option<String>,
+    critted_by_name: Option<String>,
+}
+
+impl From<ww_workspace::Task> for TaskJson {
+    fn from(t: ww_workspace::Task) -> Self {
+        Self {
+            id: t.id,
+            intent: t.intent,
+            why: t.why,
+            scope: t.scope,
+            status: t.status.to_string(),
+            created: t.created,
+            agent_id: t.agent_id,
+            defense: t.defense,
+            change_ids: t.change_ids,
+            taste_score: t.taste_score,
+            taste_note: t.taste_note,
+            submitted_by: t.submitted_by,
+            submitted_by_name: t.submitted_by_name,
+            critted_by: t.critted_by,
+            critted_by_name: t.critted_by_name,
+        }
+    }
+}
