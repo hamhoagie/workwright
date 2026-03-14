@@ -48,14 +48,41 @@
 
         .confirmation {
             display: none;
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.9rem;
-            padding: 1rem;
-            background: var(--code-bg);
+            text-align: center;
+            padding: 3rem 1.5rem;
             margin-top: 1.5rem;
+            border: 2px solid var(--rule);
         }
 
         .confirmation.visible { display: block; }
+
+        .confirmation-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--accept);
+        }
+
+        .confirmation-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+        }
+
+        .confirmation-detail {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+            color: var(--secondary);
+            margin-bottom: 1.25rem;
+        }
+
+        .confirmation-link {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+            color: var(--fg);
+            text-decoration: none;
+            border-bottom: 2px solid var(--fg);
+            padding-bottom: 0.1rem;
+        }
 
         footer {
             margin-top: 3rem;
@@ -113,7 +140,10 @@
         </form>
 
         <div class="confirmation" id="confirmation">
-            ✓ Brief submitted. A wright will pick it up. Watch the <a href="/" class="text-link">feed</a> for the defense.
+            <div class="confirmation-icon">✓</div>
+            <div class="confirmation-title">Brief submitted</div>
+            <div class="confirmation-detail">A wright is picking this up now. It will read the taste guide, do the work, and defend its choices.</div>
+            <a href="/" class="confirmation-link">Watch the feed →</a>
         </div>
 
         <hr class="divider">
@@ -218,10 +248,9 @@
                     return;
                 }
                 if (res.ok) {
-                    document.getElementById('intent').value = '';
-                    document.getElementById('why').value = '';
+                    // Hide the form, show the confirmation
+                    document.querySelector('form').classList.add('hidden');
                     document.getElementById('confirmation').classList.add('visible');
-                    setTimeout(() => document.getElementById('confirmation').classList.remove('visible'), 5000);
                 }
             } catch (e) {
                 console.error('API not available');
