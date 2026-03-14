@@ -1,0 +1,7 @@
+[package]
+name = "ww-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ww-workspace = { path = "../ww-workspace" }
