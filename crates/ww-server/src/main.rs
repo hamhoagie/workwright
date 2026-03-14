@@ -213,10 +213,10 @@ async fn run_wright(db: &Db, root: &PathBuf, llm: &LlmClient, task_id: &str) {
         return;
     }
 
-    // LLM calls
+    // LLM call — get changes
     let prompt = build_wright_prompt(&task, &file_content, &guide);
-    let new_content = match llm.call(&prompt).await {
-        Ok(text) => strip_fences(text.trim()),
+    let llm_output = match llm.call(&prompt).await {
+        Ok(text) => text.trim().to_string(),
         Err(e) => {
             ws.locks.release(&file_scope, "wright-1").ok();
             task.status = ww_workspace::TaskStatus::Failed;
@@ -226,7 +226,29 @@ async fn run_wright(db: &Db, root: &PathBuf, llm: &LlmClient, task_id: &str) {
         }
     };
 
-    let defense_prompt = build_defense_prompt(&task, &new_content);
+    // Apply diff or use as complete file (for new files)
+    let new_content = if file_content.is_empty() {
+        // New file — LLM output is the complete content
+        strip_fences(&llm_output)
+    } else if llm_output.contains("<<<SEARCH") {
+        // Diff mode — apply search/replace blocks
+        match apply_diff(&file_content, &llm_output) {
+            Ok(result) => result,
+            Err(e) => {
+                ws.locks.release(&file_scope, "wright-1").ok();
+                task.status = ww_workspace::TaskStatus::Failed;
+                task.defense = Some(format!("Diff apply failed: {e}"));
+                db.update_task(&task).ok();
+                tracing::warn!(task_id, error = %e, "diff apply failed");
+                return;
+            }
+        }
+    } else {
+        // Fallback — LLM returned complete file anyway
+        strip_fences(&llm_output)
+    };
+
+    let defense_prompt = build_defense_prompt(&task, &llm_output);
     let defense = match llm.call(&defense_prompt).await {
         Ok(text) => text.trim().to_string(),
         Err(e) => {
@@ -686,8 +708,11 @@ fn build_wright_prompt(
         )
     };
 
-    format!(
-        r#"You are a wright — a craftsperson who works within a tradition.
+    let is_new_file = file_content.is_empty();
+
+    if is_new_file {
+        format!(
+            r#"You are a wright — a craftsperson who works within a tradition.
 
 ## Taste Guide
 {taste_guide}
@@ -697,18 +722,52 @@ fn build_wright_prompt(
 **Why:** {why}
 **Scope:** {scope}
 
-## Target File Content
+This is a new file. Return the complete file content. No explanations, no markdown fences, just the code."#,
+            intent = task.intent,
+            why = task.why,
+            feedback_block = feedback_block,
+            scope = task.scope,
+        )
+    } else {
+        format!(
+            r#"You are a wright — a craftsperson who works within a tradition.
+
+## Taste Guide
+{taste_guide}
+{feedback_block}
+## Your Task
+**Intent:** {intent}
+**Why:** {why}
+**Scope:** {scope}
+
+## Current File Content
 ```
 {file_display}
 ```
 
 ## Instructions
-Make the change described in the intent. Follow the principles. Return the complete file content — no explanations, no markdown fences, just the code."#,
-        intent = task.intent,
-        why = task.why,
-        feedback_block = feedback_block,
-        scope = task.scope,
-    )
+Return ONLY the changes needed. Use this exact format for each change:
+
+<<<SEARCH
+exact lines from the current file to find
+>>>REPLACE
+the new lines to replace them with
+<<<END
+
+Rules:
+- SEARCH block must match the current file exactly (including whitespace)
+- Include 2-3 lines of context around the change so the match is unambiguous
+- Multiple changes: use multiple SEARCH/REPLACE blocks
+- Do NOT reproduce the entire file
+- Do NOT add explanations outside the blocks
+- If adding new code, use a SEARCH block that finds the insertion point (the lines just before where the new code goes)"#,
+            intent = task.intent,
+            why = task.why,
+            feedback_block = feedback_block,
+            scope = task.scope,
+            file_display = file_display,
+        )
+    }
 }
 
 fn build_defense_prompt(task: &ww_workspace::Task, code: &str) -> String {
@@ -730,6 +789,69 @@ Why this form and not another. 2-4 sentences. Conceptual, not technical. Go:"#,
         why = task.why,
         code = truncated,
     )
+}
+
+fn apply_diff(original: &str, diff_output: &str) -> std::result::Result<String, String> {
+    let mut result = original.to_string();
+    let mut applied = 0;
+
+    // Parse SEARCH/REPLACE blocks
+    let blocks: Vec<&str> = diff_output.split("<<<SEARCH").collect();
+    for block in blocks.iter().skip(1) {
+        let parts: Vec<&str> = block.splitn(2, ">>>REPLACE").collect();
+        if parts.len() != 2 {
+            return Err(format!("Malformed block — missing >>>REPLACE"));
+        }
+
+        let search = parts[0].trim_matches('\n');
+
+        let replace_and_rest: Vec<&str> = parts[1].splitn(2, "<<<END").collect();
+        let replace = replace_and_rest[0].trim_matches('\n');
+
+        // Try exact match first
+        if result.contains(search) {
+            result = result.replacen(search, replace, 1);
+            applied += 1;
+        } else {
+            // Try with trimmed whitespace matching (fuzzy)
+            let search_trimmed: Vec<&str> = search.lines()
+                .map(|l| l.trim())
+                .collect();
+            let result_lines: Vec<String> = result.lines()
+                .map(|l| l.to_string())
+                .collect();
+
+            let mut found = false;
+            'outer: for i in 0..result_lines.len() {
+                if i + search_trimmed.len() > result_lines.len() { break; }
+                for (j, search_line) in search_trimmed.iter().enumerate() {
+                    if result_lines[i + j].trim() != *search_line {
+                        continue 'outer;
+                    }
+                }
+                // Found fuzzy match at line i
+                let mut new_lines: Vec<String> = result_lines[..i].to_vec();
+                new_lines.extend(replace.lines().map(|l| l.to_string()));
+                new_lines.extend(result_lines[i + search_trimmed.len()..].to_vec());
+                result = new_lines.join("\n");
+                applied += 1;
+                found = true;
+                break;
+            }
+            if !found {
+                return Err(format!(
+                    "Could not find SEARCH block in file: '{}'",
+                    &search[..search.len().min(80)]
+                ));
+            }
+        }
+    }
+
+    if applied == 0 {
+        return Err("No SEARCH/REPLACE blocks found".to_string());
+    }
+
+    Ok(result)
 }
 
 fn strip_fences(text: &str) -> String {
