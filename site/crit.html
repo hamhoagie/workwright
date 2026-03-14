@@ -122,6 +122,23 @@
             border: 1px solid var(--rule);
         }
 
+        .diff-add {
+            color: var(--diff-add-fg);
+            background: var(--diff-add-bg);
+            display: inline-block;
+            width: 100%;
+        }
+
+        .diff-del {
+            color: var(--diff-del-fg);
+            background: var(--diff-del-bg);
+            display: inline-block;
+            width: 100%;
+        }
+
+        .diff-ctx { color: var(--diff-ctx-fg); }
+        .diff-sep { color: var(--diff-ctx-fg); opacity: 0.3; }
+
         .code-tabs {
             display: flex;
             gap: 0;
@@ -521,7 +538,7 @@
                 ${hasOriginal ? `<button class="code-tab"
                         onclick="switchTab('${taskId}', 'original')">Original</button>` : ''}
             </div>
-            <div class="code-content" id="code-content-${taskId}">${esc(defaultContent)}</div>
+            <div class="code-content" id="code-content-${taskId}">${defaultView === 'diff' ? colorizeDiff(defaultContent) : esc(defaultContent)}</div>
         `;
 
         section.dataset.original = data.original || '';
@@ -533,11 +550,27 @@
         const section = document.getElementById(`code-${taskId}`);
         const content = document.getElementById(`code-content-${taskId}`);
         const labels = { diff: 'Changes', staged: 'Full file', original: 'Original' };
-        content.textContent = section.dataset[tab] || '';
+        const raw = section.dataset[tab] || '';
+
+        if (tab === 'diff') {
+            content.innerHTML = colorizeDiff(raw);
+        } else {
+            content.textContent = raw;
+        }
 
         section.querySelectorAll('.code-tab').forEach(btn => {
             btn.classList.toggle('active', btn.textContent.trim() === labels[tab]);
         });
+    }
+
+    function colorizeDiff(text) {
+        return text.split('\n').map(line => {
+            const escaped = esc(line);
+            if (line.startsWith('+ ')) return `<span class="diff-add">${escaped}</span>`;
+            if (line.startsWith('- ')) return `<span class="diff-del">${escaped}</span>`;
+            if (line === '---') return `<span class="diff-sep">${escaped}</span>`;
+            return `<span class="diff-ctx">${escaped}</span>`;
+        }).join('\n');
     }
 
     function togglePreview(taskId, changeId) {

@@ -122,6 +122,14 @@
             font-weight: 500;
         }
 
+        .diff-added {
+            color: var(--accept);
+        }
+
+        .diff-removed {
+            color: var(--reject);
+        }
+
         .feed-score {
             font-family: "IBM Plex Mono", monospace;
             font-size: 0.8rem;
@@ -246,7 +254,7 @@
                     <div class="feed-details" id="details-${i}">
                         <div class="feed-why">${esc(t.why)}</div>
                         <div class="feed-meta">${submitter ? esc(submitter) + ' · ' : ''}${time} · ${t.status}</div>
-                        ${t.defense ? `<div class="feed-defense">${esc(t.defense)}</div>` : ''}
+                        ${t.defense ? `<div class="feed-defense">${colorDiff(t.defense)}</div>` : ''}
                         ${score !== null ? `<div class="feed-score ${scoreClass}">Score: ${score > 0 ? '+' : ''}${score}${t.taste_note ? ' — ' + esc(t.taste_note) : ''}</div>` : ''}
                     </div>
                 </div>`;
@@ -285,6 +293,16 @@
         const d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
+    }
+
+    function colorDiff(s) {
+        if (!s) return '';
+        return s.split('\n').map(line => {
+            const escaped = esc(line);
+            if (line.startsWith('+')) return `<span class="diff-added">${escaped}</span>`;
+            if (line.startsWith('-')) return `<span class="diff-removed">${escaped}</span>`;
+            return escaped;
+        }).join('\n');
     }
 
     loadFeed();

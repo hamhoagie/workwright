@@ -216,3 +216,24 @@ li strong { color: var(--fg); }
     .container { padding: 2rem 1.25rem; }
     h1 { font-size: 1.75rem; }
 }
+
+/* ---- DIFF COLORS ---- */
+/* Muted tones that read on both light and dark backgrounds.
+   Inspired by solarized — not pure red/green, but shifted
+   to stay legible and accessible. */
+:root {
+    --diff-add-fg: #2b6a30;
+    --diff-add-bg: rgba(43, 106, 48, 0.08);
+    --diff-del-fg: #8b3030;
+    --diff-del-bg: rgba(139, 48, 48, 0.08);
+    --diff-ctx-fg: var(--secondary);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --diff-add-fg: #8ec98e;
+        --diff-add-bg: rgba(142, 201, 142, 0.1);
+        --diff-del-fg: #e08080;
+        --diff-del-bg: rgba(224, 128, 128, 0.1);
+    }
+}
