@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     submitted_by      TEXT,
     submitted_by_name TEXT,
     critted_by        TEXT,
-    critted_by_name   TEXT
+    critted_by_name   TEXT,
+    feedback      TEXT DEFAULT '[]',
+    attempts      INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS taste_signals (
@@ -98,8 +100,8 @@ impl Db {
         conn.execute(
             "INSERT INTO tasks (id, intent, why, scope, status, created, agent_id, defense, \
              context, change_ids, taste_score, taste_note, submitted_by, submitted_by_name, \
-             critted_by, critted_by_name) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+             critted_by, critted_by_name, feedback, attempts) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 task.id,
                 task.intent,
@@ -117,6 +119,8 @@ impl Db {
                 task.submitted_by_name,
                 task.critted_by,
                 task.critted_by_name,
+                serde_json::to_string(&task.feedback).unwrap_or_default(),
+                task.attempts,
             ],
         )?;
         Ok(())
@@ -127,7 +131,7 @@ impl Db {
         let mut stmt = conn.prepare(
             "SELECT id, intent, why, scope, status, created, agent_id, defense, \
              context, change_ids, taste_score, taste_note, submitted_by, submitted_by_name, \
-             critted_by, critted_by_name \
+             critted_by, critted_by_name, feedback, attempts \
              FROM tasks ORDER BY created DESC",
         )?;
         let tasks = stmt
@@ -149,6 +153,8 @@ impl Db {
                     submitted_by_name: row.get(13)?,
                     critted_by: row.get(14)?,
                     critted_by_name: row.get(15)?,
+                    feedback: parse_json_vec(row.get::<_, Option<String>>(16)?),
+                    attempts: row.get::<_, Option<u32>>(17)?.unwrap_or(0),
                 })
             })?
             .filter_map(|r| r.ok())
@@ -165,7 +171,7 @@ impl Db {
         conn.execute(
             "UPDATE tasks SET status=?1, agent_id=?2, defense=?3, change_ids=?4, \
              taste_score=?5, taste_note=?6, submitted_by=?7, submitted_by_name=?8, \
-             critted_by=?9, critted_by_name=?10 WHERE id=?11",
+             critted_by=?9, critted_by_name=?10, feedback=?11, attempts=?12 WHERE id=?13",
             params![
                 task.status.to_string(),
                 task.agent_id,
@@ -177,6 +183,8 @@ impl Db {
                 task.submitted_by_name,
                 task.critted_by,
                 task.critted_by_name,
+                serde_json::to_string(&task.feedback).unwrap_or_default(),
+                task.attempts,
                 task.id,
             ],
         )?;

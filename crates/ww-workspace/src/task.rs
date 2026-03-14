@@ -59,6 +59,12 @@ pub struct Task {
     pub critted_by: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub critted_by_name: Option<String>,
+    /// Previous rejection reasons — the wright reads these to improve.
+    #[serde(default)]
+    pub feedback: Vec<String>,
+    /// How many times the wright has attempted this task.
+    #[serde(default)]
+    pub attempts: u32,
 }
 
 pub struct TaskStore {
@@ -98,6 +104,8 @@ impl TaskStore {
             submitted_by_name: None,
             critted_by: None,
             critted_by_name: None,
+            feedback: Vec::new(),
+            attempts: 0,
         };
         self.append(&task)?;
         Ok(task)

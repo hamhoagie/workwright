@@ -451,7 +451,11 @@
                 <div class="task-scope">${esc(task.scope)}</div>
             </div>
             <div class="task-why">${esc(task.why)}</div>
-            <div class="task-meta">by ${esc(submitter)} · ${time}</div>
+            <div class="task-meta">by ${esc(submitter)} · ${time}${task.attempts > 0 ? ` · attempt ${task.attempts + 1}/3` : ''}</div>
+            ${task.feedback && task.feedback.length > 0 ? `
+                <div class="defense-label" style="margin-top:0.75rem;margin-bottom:0.25rem">Previous rejections</div>
+                <div class="defense-text" style="opacity:0.7;margin-bottom:1rem">${task.feedback.map((f,i) => esc((i+1) + '. ' + f)).join('\\n')}</div>
+            ` : ''}
 
             ${isDesign ? `
                 <div class="defense-label">Preview</div>
@@ -600,10 +604,15 @@
         });
 
         if (resp.ok) {
+            const data = await resp.json();
             result.className = 'result ok';
-            result.textContent = score > 0
-                ? `✓ Accepted (+${score}). Taste signal recorded.`
-                : `✗ Rejected (${score}). Taste signal recorded.`;
+            if (score > 0) {
+                result.textContent = `✓ Accepted (+${score}). Taste signal recorded.`;
+            } else if (data.retrying) {
+                result.textContent = `✗ Rejected (${score}). Wright will retry (attempt ${data.attempt + 1}/3).`;
+            } else {
+                result.textContent = `✗ Failed after ${data.attempt} attempts. Task closed.`;
+            }
             btn.textContent = 'Done';
 
             // Collapse the task out

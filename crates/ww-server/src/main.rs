@@ -155,6 +155,8 @@ async fn post_task(
         submitted_by_name: Some(user.display_name.clone()),
         critted_by: None,
         critted_by_name: None,
+        feedback: vec![],
+        attempts: 0,
     };
 
     if let Err(e) = state.db.create_task(&task) {
@@ -285,31 +287,72 @@ async fn post_crit(
         _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "task not found"}))).into_response(),
     };
 
-    task.status = if score > 0.0 {
-        ww_workspace::TaskStatus::Accepted
-    } else {
-        ww_workspace::TaskStatus::Rejected
-    };
     task.taste_score = Some(score);
-    task.taste_note = Some(body.reason);
+    task.taste_note = Some(body.reason.clone());
     task.critted_by = Some(user.id.clone());
     task.critted_by_name = Some(user.display_name.clone());
-    state.db.update_task(&task).ok();
 
-    // Trust flows to submitter
-    if let Some(ref submitter_id) = task.submitted_by {
-        state.db.update_trust(submitter_id, score * 0.1).ok();
-    }
+    let file_scope = task.scope.split(':').next().unwrap_or(&task.scope).to_string();
 
-    // Promote or discard staged files
-    let file_scope = task.scope.split(':').next().unwrap_or(&task.scope);
     if score > 0.0 {
-        if state.workspace.promote(file_scope).unwrap_or(false) { deploy_site(&state.root); }
+        // Accepted — promote staged file, deploy
+        task.status = ww_workspace::TaskStatus::Accepted;
+        state.db.update_task(&task).ok();
+
+        if let Some(ref submitter_id) = task.submitted_by {
+            state.db.update_trust(submitter_id, score * 0.1).ok();
+        }
+
+        if state.workspace.promote(&file_scope).unwrap_or(false) {
+            deploy_site(&state.root);
+        }
     } else {
-        state.workspace.discard(file_scope);
+        // Rejected — discard staged, add feedback, retry if under limit
+        state.workspace.discard(&file_scope);
+        task.feedback.push(body.reason.clone());
+        task.attempts += 1;
+
+        const MAX_ATTEMPTS: u32 = 3;
+        if task.attempts >= MAX_ATTEMPTS {
+            task.status = ww_workspace::TaskStatus::Failed;
+            task.defense = Some(format!(
+                "Failed after {} attempts. Last rejection: {}",
+                task.attempts, body.reason
+            ));
+            state.db.update_task(&task).ok();
+        } else {
+            // Reset for retry — wright will pick it up again
+            task.status = ww_workspace::TaskStatus::Pending;
+            task.agent_id = None;
+            task.defense = None;
+            state.db.update_task(&task).ok();
+
+            // Re-trigger wright
+            if let Some(ref llm) = state.llm {
+                let tid = task.id.clone();
+                let root = state.root.clone();
+                let meta_dir = root.join(".workwright");
+                let llm = llm.clone();
+                std::thread::spawn(move || {
+                    let wright_db = Db::open(&meta_dir).expect("wright db");
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("wright runtime");
+                    rt.block_on(async {
+                        run_wright(&wright_db, &root, &llm, &tid).await;
+                    });
+                });
+            }
+        }
     }
 
-    Json(serde_json::json!({"ok": true, "score": score})).into_response()
+    Json(serde_json::json!({
+        "ok": true,
+        "score": score,
+        "retrying": score < 0.0 && task.attempts < 3,
+        "attempt": task.attempts,
+    })).into_response()
 }
 
 fn deploy_site(root: &std::path::Path) {
@@ -537,12 +580,28 @@ fn build_wright_prompt(
     } else {
         file_content
     };
+    let feedback_block = if task.feedback.is_empty() {
+        String::new()
+    } else {
+        let items: Vec<String> = task.feedback.iter()
+            .enumerate()
+            .map(|(i, f)| format!("  {}. {}", i + 1, f))
+            .collect();
+        format!(
+            "\n## Previous Attempts (rejected — learn from this feedback)\n\
+             This is attempt {}. Previous work was rejected for these reasons:\n{}\n\
+             Do NOT repeat the same mistakes. Address the feedback directly.\n",
+            task.attempts + 1,
+            items.join("\n")
+        )
+    };
+
     format!(
         r#"You are a wright — a craftsperson who works within a tradition.
 
 ## Taste Guide
 {taste_guide}
-
+{feedback_block}
 ## Your Task
 **Intent:** {intent}
 **Why:** {why}
@@ -557,6 +616,7 @@ fn build_wright_prompt(
 Make the change described in the intent. Follow the principles. Return the complete file content — no explanations, no markdown fences, just the code."#,
         intent = task.intent,
         why = task.why,
+        feedback_block = feedback_block,
         scope = task.scope,
     )
 }
@@ -633,6 +693,8 @@ struct TaskJson {
     submitted_by_name: Option<String>,
     critted_by: Option<String>,
     critted_by_name: Option<String>,
+    feedback: Vec<String>,
+    attempts: u32,
 }
 
 impl From<ww_workspace::Task> for TaskJson {
@@ -653,6 +715,8 @@ impl From<ww_workspace::Task> for TaskJson {
             submitted_by_name: t.submitted_by_name,
             critted_by: t.critted_by,
             critted_by_name: t.critted_by_name,
+            feedback: t.feedback,
+            attempts: t.attempts,
         }
     }
 }
