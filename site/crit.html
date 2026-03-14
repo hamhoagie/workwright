@@ -442,9 +442,7 @@
         const defense = task.defense || 'No defense provided.';
         const submitter = task.submitted_by_name || task.agent_id || 'unknown';
         const time = relativeTime(task.created);
-        const hasPreview = task.change_ids && task.change_ids.length > 0 &&
-                          task.scope.includes('.html');
-        const previewId = task.change_ids?.[0] || '';
+        const isDesign = task.scope.includes('.html') || task.scope.includes(':design');
 
         return `
         <div class="queue-item" id="task-${task.id}">
@@ -455,19 +453,21 @@
             <div class="task-why">${esc(task.why)}</div>
             <div class="task-meta">by ${esc(submitter)} · ${time}</div>
 
-            <div class="code-section" id="code-${task.id}">
-                <button class="preview-toggle" onclick="loadDiff('${task.id}')">Show changes</button>
-            </div>
+            ${isDesign ? `
+                <div class="defense-label">Preview</div>
+                <iframe class="preview-frame" id="preview-${task.id}"
+                    src="/api/render/${task.id}" style="display:block;"></iframe>
+                <div class="code-section" id="code-${task.id}">
+                    <button class="preview-toggle" onclick="loadDiff('${task.id}')">Show code</button>
+                </div>
+            ` : `
+                <div class="code-section" id="code-${task.id}">
+                    <button class="preview-toggle" onclick="loadDiff('${task.id}')">Show changes</button>
+                </div>
+            `}
 
             <div class="defense-label">Defense</div>
             <div class="defense-text">${esc(defense)}</div>
-
-            ${hasPreview ? `
-                <button class="preview-toggle" onclick="togglePreview('${task.id}', '${previewId}')">
-                    Show live preview
-                </button>
-                <iframe class="preview-frame" id="preview-${task.id}"></iframe>
-            ` : ''}
 
             <div class="crit-form">
                 <div class="score-section">

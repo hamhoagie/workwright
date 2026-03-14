@@ -86,6 +86,7 @@ async fn main() {
         .route("/api/register", post(post_register))
         .route("/api/preview/{change_id}", get(get_preview))
         .route("/api/diff/{task_id}", get(get_diff))
+        .route("/api/render/{task_id}", get(get_render))
         .fallback_service(ServeDir::new(&site_dir))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -471,6 +472,31 @@ async fn get_diff(
         "staged": staged,
         "has_staged": !staged.is_empty(),
     })).into_response()
+}
+
+async fn get_render(
+    State(state): State<SharedState>,
+    Path(task_id): Path<String>,
+) -> impl IntoResponse {
+    let task = match state.db.get_task(&task_id) {
+        Ok(Some(t)) => t,
+        _ => return (StatusCode::NOT_FOUND, "task not found").into_response(),
+    };
+
+    let file_scope = task.scope.split(':').next().unwrap_or(&task.scope);
+
+    // Try staged first, fall back to live
+    let content = state.workspace.staging.read(file_scope)
+        .ok()
+        .flatten()
+        .or_else(|| state.workspace.read_file(file_scope));
+
+    match content {
+        Some(html) if file_scope.ends_with(".html") => {
+            axum::response::Html(html).into_response()
+        }
+        _ => (StatusCode::NOT_FOUND, "no renderable content").into_response(),
+    }
 }
 
 // --- Helpers ---
