@@ -10,21 +10,25 @@ use axum::{
     Router,
     routing::{get, post},
     extract::{Json, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use tracing_subscriber;
+use tower_http::services::ServeDir;
 
 use ww_workspace::{TaskStore, TasteStore, Workspace};
+use ww_wright::Wright;
+use ww_wright::llm::LlmClient;
 
 struct AppState {
+    root: PathBuf,
     workspace: Workspace,
     tasks: TaskStore,
     taste: TasteStore,
     submit_token: String,
+    llm: Option<LlmClient>,
 }
 
 type SharedState = Arc<RwLock<AppState>>;
@@ -34,7 +38,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let root = std::env::var("WW_ROOT").unwrap_or_else(|_| ".".to_string());
-    let root = PathBuf::from(root);
+    let root = PathBuf::from(&root).canonicalize().unwrap_or_else(|_| PathBuf::from(&root));
     let meta_dir = root.join(".workwright");
     let token = std::env::var("WW_SUBMIT_TOKEN").unwrap_or_default();
     let port: u16 = std::env::var("WW_PORT")
@@ -42,19 +46,31 @@ async fn main() {
         .and_then(|p| p.parse().ok())
         .unwrap_or(8077);
 
+    let llm = LlmClient::from_env().ok();
+    if llm.is_none() {
+        tracing::warn!("ANTHROPIC_API_KEY not set — wrights will not run");
+    }
+
+    let site_dir = root.join("site");
+
     let state = Arc::new(RwLock::new(AppState {
         workspace: Workspace::new(&root),
         tasks: TaskStore::new(&meta_dir),
         taste: TasteStore::new(&meta_dir),
         submit_token: token,
+        llm,
+        root: root.clone(),
     }));
 
     let app = Router::new()
+        // API routes
         .route("/api/tasks", get(get_tasks))
         .route("/api/tasks", post(post_task))
         .route("/api/crit", post(post_crit))
         .route("/api/taste", get(get_taste))
         .route("/api/preview/{change_id}", get(get_preview))
+        // Static site files
+        .fallback_service(ServeDir::new(&site_dir))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -63,6 +79,20 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+// --- Auth ---
+
+fn check_auth(headers: &HeaderMap, token: &str) -> bool {
+    if token.is_empty() {
+        return true; // no token configured = open
+    }
+    headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|t| t.trim() == token)
+        .unwrap_or(false)
 }
 
 // --- Handlers ---
@@ -87,17 +117,60 @@ struct PostTaskReq {
 
 async fn post_task(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     Json(body): Json<PostTaskReq>,
 ) -> impl IntoResponse {
+    let (task_id, root, llm) = {
+        let st = state.read().await;
+
+        if !check_auth(&headers, &st.submit_token) {
+            return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "unauthorized"}))).into_response();
+        }
+
+        let scope = body.scope.as_deref().unwrap_or("site/index.html");
+        let file_path = scope.split(':').next().unwrap_or(scope);
+        let context = vec![file_path.to_string()];
+
+        match st.tasks.create(&body.intent, &body.why, scope, context) {
+            Ok(task) => {
+                let task_json = TaskJson::from(task.clone());
+                let task_id = task.id.clone();
+                let root = st.root.clone();
+                let llm = st.llm.clone();
+
+                // Return early with response, spawn wright below
+                (task_id, root, llm)
+            }
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        }
+    };
+
+    // Spawn wright on a dedicated thread with its own runtime.
+    // This prevents wright file I/O from blocking the server's event loop.
+    if let Some(llm) = llm {
+        let tid = task_id.clone();
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("wright runtime");
+            rt.block_on(async {
+                let wright = Wright::new(&root, llm);
+                let result = wright.work(&tid).await;
+                if result.success {
+                    tracing::info!(task_id = %tid, "wright completed");
+                } else {
+                    tracing::warn!(task_id = %tid, msg = %result.message, "wright failed");
+                }
+            });
+        });
+    }
+
+    // Re-read the task to return it
     let st = state.read().await;
-
-    let scope = body.scope.as_deref().unwrap_or("site/index.html");
-    let file_path = scope.split(':').next().unwrap_or(scope);
-    let context = vec![file_path.to_string()];
-
-    match st.tasks.create(&body.intent, &body.why, scope, context) {
-        Ok(task) => (StatusCode::CREATED, Json(TaskJson::from(task))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    match st.tasks.get(&task_id) {
+        Ok(Some(task)) => (StatusCode::CREATED, Json(TaskJson::from(task))).into_response(),
+        _ => (StatusCode::CREATED, Json(serde_json::json!({"id": task_id}))).into_response(),
     }
 }
 
@@ -110,29 +183,35 @@ struct PostCritReq {
 
 async fn post_crit(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     Json(body): Json<PostCritReq>,
 ) -> impl IntoResponse {
     let st = state.read().await;
+
+    if !check_auth(&headers, &st.submit_token) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "unauthorized"}))).into_response();
+    }
+
     let score = body.score.clamp(-1.0, 1.0);
 
     // Record taste signal
     if let Err(e) = st.taste.record(score, &body.reason, &body.task_id, None) {
-        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
     }
 
     // Update task status
     match st.tasks.crit(&body.task_id, score, &body.reason) {
-        Ok(_task) => {
-            // Promote or discard staged files
-            let file_scope = _task.scope.split(':').next().unwrap_or(&_task.scope);
+        Ok(task) => {
+            let file_scope = task.scope.split(':').next().unwrap_or(&task.scope);
             if score > 0.0 {
                 st.workspace.promote(file_scope).ok();
+                // TODO: deploy to web server (rsync)
             } else {
                 st.workspace.discard(file_scope);
             }
             Json(serde_json::json!({"ok": true, "score": score})).into_response()
         }
-        Err(e) => (StatusCode::NOT_FOUND, e.to_string()).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
     }
 }
 
@@ -157,7 +236,6 @@ async fn get_preview(
     let st = state.read().await;
     if let Ok(Some(change)) = st.workspace.changelog.get(&change_id) {
         if change.path.ends_with(".html") {
-            // Try staged first
             if let Ok(Some(content)) = st.workspace.staging.read(&change.path) {
                 return axum::response::Html(content).into_response();
             }
