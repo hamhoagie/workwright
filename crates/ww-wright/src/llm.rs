@@ -82,6 +82,19 @@ impl LlmClient {
         Ok(Self::new(&api_key, &model))
     }
 
+    /// Return a new client with a different model (same API key).
+    pub fn with_model(&self, model: &str) -> Self {
+        Self {
+            api_key: self.api_key.clone(),
+            model: model.to_string(),
+            http: self.http.clone(),
+        }
+    }
+
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+
     pub async fn call(&self, prompt: &str) -> Result<String, LlmError> {
         let body = MessagesRequest {
             model: self.model.clone(),

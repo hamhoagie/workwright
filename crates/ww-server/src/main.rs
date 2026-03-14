@@ -344,12 +344,21 @@ async fn post_crit(
             task.defense = None;
             state.db.update_task(&task).ok();
 
-            // Re-trigger wright
+            // Re-trigger wright — escalate model on final attempt
             if let Some(ref llm) = state.llm {
                 let tid = task.id.clone();
                 let root = state.root.clone();
                 let meta_dir = root.join(".workwright");
-                let llm = llm.clone();
+                let attempts = task.attempts;
+
+                // Escalate: after 2 failures, bring in Opus for the last try
+                let wright_llm = if attempts >= 2 {
+                    tracing::info!(task_id = %tid, "escalating to opus for final attempt");
+                    llm.with_model("claude-opus-4-6")
+                } else {
+                    llm.clone()
+                };
+
                 std::thread::spawn(move || {
                     let wright_db = Db::open(&meta_dir).expect("wright db");
                     let rt = tokio::runtime::Builder::new_current_thread()
@@ -357,7 +366,7 @@ async fn post_crit(
                         .build()
                         .expect("wright runtime");
                     rt.block_on(async {
-                        run_wright(&wright_db, &root, &llm, &tid).await;
+                        run_wright(&wright_db, &root, &wright_llm, &tid).await;
                     });
                 });
             }
