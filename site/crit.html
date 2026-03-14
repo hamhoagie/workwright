@@ -165,6 +165,61 @@
 
         .preview-toggle:hover { background: var(--input-bg); }
 
+        .code-view {
+            margin-bottom: 1.25rem;
+        }
+
+        .code-view-label {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+            color: var(--secondary);
+        }
+
+        .code-view-path {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.75rem;
+            color: var(--secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .code-content {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            padding: 1rem;
+            background: var(--code-bg);
+            overflow-x: auto;
+            white-space: pre;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid var(--rule);
+        }
+
+        .code-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 0;
+        }
+
+        .code-tab {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.75rem;
+            padding: 0.4rem 1rem;
+            border: 1px solid var(--rule);
+            border-bottom: none;
+            background: var(--input-bg);
+            color: var(--secondary);
+            cursor: pointer;
+        }
+
+        .code-tab.active {
+            background: var(--code-bg);
+            color: var(--fg);
+            font-weight: 500;
+        }
+
         .preview-frame {
             width: 100%;
             height: 400px;
@@ -400,12 +455,16 @@
             <div class="task-why">${esc(task.why)}</div>
             <div class="task-meta">by ${esc(submitter)} · ${time}</div>
 
+            <div class="code-section" id="code-${task.id}">
+                <button class="preview-toggle" onclick="loadDiff('${task.id}')">Show changes</button>
+            </div>
+
             <div class="defense-label">Defense</div>
             <div class="defense-text">${esc(defense)}</div>
 
             ${hasPreview ? `
                 <button class="preview-toggle" onclick="togglePreview('${task.id}', '${previewId}')">
-                    Show preview
+                    Show live preview
                 </button>
                 <iframe class="preview-frame" id="preview-${task.id}"></iframe>
             ` : ''}
@@ -454,6 +513,54 @@
         buttons.forEach(b => {
             const val = parseFloat(b.textContent.replace('−', '-'));
             b.classList.toggle('selected', val === score);
+        });
+    }
+
+    async function loadDiff(taskId) {
+        const section = document.getElementById(`code-${taskId}`);
+        section.innerHTML = '<div class="code-view-label">Loading...</div>';
+
+        const resp = await fetch(`${API}/diff/${taskId}`);
+        if (!resp.ok) {
+            section.innerHTML = '<div class="code-view-label">Could not load changes.</div>';
+            return;
+        }
+
+        const data = await resp.json();
+        if (!data.has_staged && !data.original) {
+            section.innerHTML = '<div class="code-view-label">No file content available.</div>';
+            return;
+        }
+
+        const hasOriginal = data.original && data.original.length > 0;
+        const hasStaged = data.has_staged;
+        const showTab = hasOriginal && hasStaged ? 'staged' : (hasStaged ? 'staged' : 'original');
+
+        section.innerHTML = `
+            <div class="code-view-path">${esc(data.file_path)}</div>
+            ${(hasOriginal && hasStaged) ? `
+                <div class="code-tabs">
+                    <button class="code-tab ${showTab === 'staged' ? 'active' : ''}"
+                            onclick="switchTab('${taskId}', 'staged')">Proposed</button>
+                    <button class="code-tab ${showTab === 'original' ? 'active' : ''}"
+                            onclick="switchTab('${taskId}', 'original')">Original</button>
+                </div>
+            ` : `<div class="code-view-label">${hasStaged ? 'Proposed' : 'Current file'}</div>`}
+            <div class="code-content" id="code-content-${taskId}">${esc(hasStaged ? data.staged : data.original)}</div>
+        `;
+
+        // Store data for tab switching
+        section.dataset.original = data.original || '';
+        section.dataset.staged = data.staged || '';
+    }
+
+    function switchTab(taskId, tab) {
+        const section = document.getElementById(`code-${taskId}`);
+        const content = document.getElementById(`code-content-${taskId}`);
+        content.textContent = tab === 'staged' ? section.dataset.staged : section.dataset.original;
+
+        section.querySelectorAll('.code-tab').forEach(btn => {
+            btn.classList.toggle('active', btn.textContent.trim() === (tab === 'staged' ? 'Proposed' : 'Original'));
         });
     }
 

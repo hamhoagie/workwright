@@ -20,3 +20,5 @@
 {"id":"991b77c2ae65","path":"crates/ww-wright/src/llm.rs","intent":"Add a one-line doc comment to the LlmClient struct","agent_id":"wright-1","timestamp":1773507322.0199106,"before_hash":"28529ca664e7fae7","after_hash":"030a2700d0fcca35"}
 {"id":"7a37b3b81709","path":"README.md","intent":"Test SQLite + wright loop","agent_id":"wright-1","timestamp":1773508417.8434498,"before_hash":"6f335002217bbda3","after_hash":"b247609752f7a2a0"}
 {"id":"da31b5c92b16","path":"crates/ww-server/src/main.rs","intent":"Add rate limiting middleware to protect write endpoints","agent_id":"wright-1","timestamp":1773508833.8279958,"before_hash":"89caf5312cd35a37","after_hash":"552f0ef309939816"}
+{"id":"09707d068aa2","path":"site/index.html","intent":"auto dark/light mode ","agent_id":"wright-1","timestamp":1773525107.5084047,"before_hash":"0a8affca067a71a1","after_hash":"9917aba17f4efff5"}
+{"id":"c4b05d8734fe","path":"site/index.html","intent":"Add a favicon — a simple monochrome W in IBM Plex Mono style, as an inline SVG data URI","agent_id":"wright-1","timestamp":1773525418.0714753,"before_hash":"9917aba17f4efff5","after_hash":"cb1acc6e50f34bf0"}

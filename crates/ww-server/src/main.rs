@@ -85,6 +85,7 @@ async fn main() {
         .route("/api/me", get(get_me))
         .route("/api/register", post(post_register))
         .route("/api/preview/{change_id}", get(get_preview))
+        .route("/api/diff/{task_id}", get(get_diff))
         .fallback_service(ServeDir::new(&site_dir))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -444,6 +445,32 @@ async fn get_preview(
         }
     }
     StatusCode::NOT_FOUND.into_response()
+}
+
+async fn get_diff(
+    State(state): State<SharedState>,
+    Path(task_id): Path<String>,
+) -> impl IntoResponse {
+    let task = match state.db.get_task(&task_id) {
+        Ok(Some(t)) => t,
+        _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "not found"}))).into_response(),
+    };
+
+    let file_scope = task.scope.split(':').next().unwrap_or(&task.scope);
+    let original = state.workspace.read_file(file_scope).unwrap_or_default();
+    let staged = state.workspace.staging.read(file_scope)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
+    Json(serde_json::json!({
+        "task_id": task.id,
+        "scope": task.scope,
+        "file_path": file_scope,
+        "original": original,
+        "staged": staged,
+        "has_staged": !staged.is_empty(),
+    })).into_response()
 }
 
 // --- Helpers ---
