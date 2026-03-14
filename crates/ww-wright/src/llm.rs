@@ -21,6 +21,7 @@ pub enum LlmError {
     Malformed(String),
 }
 
+/// Holds the API key, model name, and HTTP client needed to call the Anthropic Messages API.
 #[derive(Debug, Clone)]
 pub struct LlmClient {
     api_key: String,

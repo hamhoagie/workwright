@@ -276,6 +276,20 @@
         .result.ok { color: var(--accept); }
         .result.err { color: var(--reject); }
 
+        .queue-item.critted {
+            transition: all 0.4s ease;
+            max-height: 2000px;
+            overflow: hidden;
+        }
+
+        .queue-item.collapsing {
+            max-height: 0 !important;
+            padding: 0 1.5rem !important;
+            margin-bottom: 0 !important;
+            border-color: transparent !important;
+            opacity: 0;
+        }
+
         .no-auth {
             font-family: "IBM Plex Mono", monospace;
             font-size: 0.9rem;
@@ -481,15 +495,27 @@
         if (resp.ok) {
             result.className = 'result ok';
             result.textContent = score > 0
-                ? `Accepted (+${score}). Taste signal recorded.`
-                : `Rejected (${score}). Taste signal recorded.`;
+                ? `✓ Accepted (+${score}). Taste signal recorded.`
+                : `✗ Rejected (${score}). Taste signal recorded.`;
             btn.textContent = 'Done';
 
-            // Fade out after a moment
-            setTimeout(() => {
-                const el = document.getElementById(`task-${taskId}`);
-                if (el) el.style.opacity = '0.3';
-            }, 1500);
+            // Collapse the task out
+            const el = document.getElementById(`task-${taskId}`);
+            if (el) {
+                el.classList.add('critted');
+                setTimeout(() => {
+                    el.classList.add('collapsing');
+                    setTimeout(() => {
+                        el.remove();
+                        // Check if queue is now empty
+                        const remaining = document.querySelectorAll('.queue-item:not(.collapsing)');
+                        if (remaining.length === 0) {
+                            document.getElementById('crit-queue').innerHTML =
+                                `<div class="queue-empty">Nothing to crit. All caught up. ✓</div>`;
+                        }
+                    }, 450);
+                }, 1200);
+            }
         } else {
             const err = await resp.json().catch(() => ({}));
             result.className = 'result err';
