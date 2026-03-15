@@ -105,10 +105,62 @@
 /* ---- TASTE ---- */
 
 .taste-guide {
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+.taste-guide h1 {
+    font-size: 1.5rem;
+    margin: 2rem 0 0.5rem;
+}
+
+.taste-guide h2 {
+    font-size: 1.15rem;
+    margin: 2rem 0 0.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+}
+
+.taste-guide h3 {
+    font-size: 0.95rem;
+    font-style: italic;
+    color: var(--secondary);
+    margin: 0 0 1rem;
+}
+
+.taste-guide p {
+    margin: 0 0 1rem;
+}
+
+.taste-guide strong {
+    font-weight: 600;
+}
+
+.taste-guide em {
+    font-style: italic;
+}
+
+.taste-guide code {
     font-family: "IBM Plex Mono", monospace;
-    font-size: 0.85rem;
-    line-height: 1.6;
-    white-space: pre-wrap;
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 2px;
+}
+
+.taste-guide hr {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 2rem 0;
+}
+
+.taste-guide ul, .taste-guide ol {
+    padding-left: 1.5rem;
+    margin: 0 0 1rem;
+}
+
+.taste-guide li {
+    margin-bottom: 0.35rem;
 }
 
 /* ---- FOOTER ---- */
