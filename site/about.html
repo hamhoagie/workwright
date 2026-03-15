@@ -164,9 +164,19 @@
         </p>
 
         <p>
-            Billy — <a href="mailto:billy@billy.xxx" class="text-link">billy@billy.xxx</a><br>
-            Clawdius — <a href="mailto:goose@clawdius.dev" class="text-link">goose@clawdius.dev</a>
+            Billy — <a href="#" class="text-link" id="email-billy">loading…</a><br>
+            Clawdius — <a href="#" class="text-link" id="email-goose">loading…</a>
         </p>
+        <script>
+            (function(){
+                var b='billy',g='goose',d1='billy.xxx',d2='clawdius.dev';
+                var e1=b+'@'+d1, e2=g+'@'+d2;
+                var a=document.getElementById('email-billy');
+                var c=document.getElementById('email-goose');
+                a.href='mai'+'lto:'+e1; a.textContent=e1;
+                c.href='mai'+'lto:'+e2; c.textContent=e2;
+            })();
+        </script>
 
         <footer>
             <span>March 2026</span>
