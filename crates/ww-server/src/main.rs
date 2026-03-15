@@ -739,12 +739,17 @@ fn build_wright_prompt(
     let is_multi = files.len() > 1;
     let all_new = files.iter().all(|(_, c)| c.is_empty());
 
-    // Build file content section
+    // Build file content with line numbers for existing files
     let files_block = files.iter().map(|(path, content)| {
         if content.is_empty() {
             format!("### {} (new file — create from scratch)", path)
         } else {
-            format!("### {}\n```\n{}\n```", path, content)
+            let numbered: String = content.lines()
+                .enumerate()
+                .map(|(i, line)| format!("{:4}| {}", i + 1, line))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("### {}\n```\n{}\n```", path, numbered)
         }
     }).collect::<Vec<_>>().join("\n\n");
 
@@ -754,37 +759,49 @@ fn build_wright_prompt(
         r#"You may need to create or edit MULTIPLE files. Use this format:
 
 ===FILE: path/to/file===
-(for existing files, use SEARCH/REPLACE blocks)
+(for existing files, use line-range edits)
 (for new files, write the complete content)
 ===FILE: path/to/other===
 ...
 
-SEARCH/REPLACE format for existing files:
-<<<SEARCH
-exact lines to find
->>>REPLACE
-new lines
-<<<END
+Edit format for existing files (reference the line numbers shown):
+<<<LINES 18-22
+replacement content for those lines
+>>>END
+
+To INSERT new lines after a specific line:
+<<<INSERT_AFTER 17
+new lines to add
+>>>END
+
+To DELETE lines:
+<<<DELETE 18-22>>>
 
 Rules:
-- SEARCH must match the existing file exactly
+- Use the line numbers shown in the file listing
 - For new files, just write the complete content after ===FILE: path===
 - Do NOT reproduce entire existing files — only the changes"#.to_string()
     } else {
-        r#"Return ONLY the changes needed. Use this exact format:
+        r#"Return ONLY the changes needed. Reference the line numbers shown in the file listing.
 
-<<<SEARCH
-exact lines from the current file to find
->>>REPLACE
-the new lines to replace them with
-<<<END
+Edit format (use line numbers from the listing above):
+<<<LINES 18-22
+replacement content for those lines
+>>>END
+
+To INSERT new lines after a specific line:
+<<<INSERT_AFTER 17
+new lines to add
+>>>END
+
+To DELETE lines:
+<<<DELETE 18-22>>>
 
 Rules:
-- SEARCH block must match the current file exactly (including whitespace)
-- Include 2-3 lines of context around the change
-- Multiple changes: use multiple SEARCH/REPLACE blocks
+- Use the exact line numbers shown in the file listing
+- Multiple changes: use multiple edit blocks
 - Do NOT reproduce the entire file
-- If adding new code, SEARCH for the insertion point (lines just before)"#.to_string()
+- Process edits from bottom to top if you have multiple changes (to keep line numbers stable)"#.to_string()
     };
 
     format!(
@@ -839,13 +856,98 @@ Why this form and not another. 2-4 sentences. Conceptual, not technical. Go:"#,
 /// 1. `===FILE: path===` blocks with SEARCH/REPLACE or complete content
 /// 2. Single-file SEARCH/REPLACE (backward compatible)
 /// 3. Complete file content (for new files)
+fn apply_edits(original: &str, edit_block: &str) -> std::result::Result<String, String> {
+    let mut lines: Vec<String> = original.lines().map(|l| l.to_string()).collect();
+
+    // Collect all edits, then apply from bottom to top (preserves line numbers)
+    let mut edits: Vec<(String, usize, usize, Vec<String>)> = Vec::new();
+
+    // Parse <<<LINES start-end ... >>>END blocks
+    for block in edit_block.split("<<<LINES ").skip(1) {
+        let Some((header, rest)) = block.split_once('\n') else { continue };
+        let range = header.trim();
+        let Some((start_s, end_s)) = range.split_once('-') else { continue };
+        let start: usize = start_s.trim().parse().unwrap_or(0);
+        let end: usize = end_s.trim().parse().unwrap_or(0);
+        if start == 0 || end == 0 { continue; }
+
+        let content = rest.split(">>>END").next().unwrap_or("").trim_matches('\n');
+        let new_lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        edits.push(("replace".to_string(), start, end, new_lines));
+    }
+
+    // Parse <<<INSERT_AFTER n ... >>>END blocks
+    for block in edit_block.split("<<<INSERT_AFTER ").skip(1) {
+        let Some((header, rest)) = block.split_once('\n') else { continue };
+        let after: usize = header.trim().parse().unwrap_or(0);
+        if after == 0 { continue; }
+
+        let content = rest.split(">>>END").next().unwrap_or("").trim_matches('\n');
+        let new_lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        edits.push(("insert".to_string(), after, after, new_lines));
+    }
+
+    // Parse <<<DELETE start-end>>> blocks
+    for block in edit_block.split("<<<DELETE ").skip(1) {
+        let range = block.split(">>>").next().unwrap_or("").trim();
+        let Some((start_s, end_s)) = range.split_once('-') else { continue };
+        let start: usize = start_s.trim().parse().unwrap_or(0);
+        let end: usize = end_s.trim().parse().unwrap_or(0);
+        if start == 0 || end == 0 { continue; }
+        edits.push(("delete".to_string(), start, end, Vec::new()));
+    }
+
+    if edits.is_empty() {
+        return Err("No line-range edits found".to_string());
+    }
+
+    // Sort by start line, descending (apply bottom-up to preserve line numbers)
+    edits.sort_by(|a, b| b.1.cmp(&a.1));
+
+    for (action, start, end, new_lines) in &edits {
+        let s = start.saturating_sub(1); // 1-indexed to 0-indexed
+        let len = lines.len();
+        let e = (*end).min(len);
+
+        match action.as_str() {
+            "replace" => {
+                lines.splice(s..e, new_lines.iter().cloned());
+            }
+            "insert" => {
+                let len2 = lines.len();
+                let pos = (*start).min(len2);
+                for (i, line) in new_lines.iter().enumerate() {
+                    lines.insert(pos + i, line.clone());
+                }
+            }
+            "delete" => {
+                lines.drain(s..e);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(lines.join("\n"))
+}
+
+fn apply_file_edits(original: &str, body: &str) -> std::result::Result<String, String> {
+    // Try line-range edits first (new format)
+    if body.contains("<<<LINES ") || body.contains("<<<INSERT_AFTER ") || body.contains("<<<DELETE ") {
+        return apply_edits(original, body);
+    }
+    // Fall back to SEARCH/REPLACE (old format)
+    if body.contains("<<<SEARCH") {
+        return apply_diff(original, body);
+    }
+    Err("No recognized edit format".to_string())
+}
+
 fn parse_multi_file_output(
     output: &str,
     original_files: &[(String, String)],
 ) -> Vec<(String, String)> {
     let mut results = Vec::new();
 
-    // Check for multi-file format: ===FILE: path===
     if output.contains("===FILE:") {
         let blocks: Vec<&str> = output.split("===FILE:").collect();
         for block in blocks.iter().skip(1) {
@@ -853,7 +955,6 @@ fn parse_multi_file_output(
             let path = header.trim().to_string();
             let body = body.trim();
 
-            // Find original content for this file
             let original = original_files
                 .iter()
                 .find(|(p, _)| *p == path)
@@ -861,38 +962,29 @@ fn parse_multi_file_output(
                 .unwrap_or("");
 
             let content = if original.is_empty() {
-                // New file
                 strip_fences(body)
-            } else if body.contains("<<<SEARCH") {
-                match apply_diff(original, body) {
+            } else {
+                match apply_file_edits(original, body) {
                     Ok(result) => result,
                     Err(e) => {
-                        tracing::warn!(path, error = %e, "diff failed for file");
+                        tracing::warn!(path, error = %e, "edit failed for file");
                         continue;
                     }
                 }
-            } else {
-                strip_fences(body)
             };
 
             results.push((path, content));
         }
     } else if original_files.len() == 1 {
-        // Single file — backward compatible
         let (path, original) = &original_files[0];
 
         let content = if original.is_empty() {
             strip_fences(output)
-        } else if output.contains("<<<SEARCH") {
-            match apply_diff(original, output) {
-                Ok(result) => result,
-                Err(e) => {
-                    tracing::warn!(path, error = %e, "diff failed");
-                    return results;
-                }
-            }
         } else {
-            strip_fences(output)
+            match apply_file_edits(original, output) {
+                Ok(result) => result,
+                Err(_) => strip_fences(output),
+            }
         };
 
         results.push((path.clone(), content));
