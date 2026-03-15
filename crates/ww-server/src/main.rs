@@ -597,9 +597,51 @@ fn deploy_site(root: &std::path::Path) {
     });
 }
 
-async fn get_taste(State(state): State<SharedState>) -> impl IntoResponse {
+async fn get_taste(
+    State(state): State<SharedState>,
+    axum::extract::Query(params): axum::extract::Query<TasteRawQuery>,
+) -> impl IntoResponse {
     match (state.db.all_signals(), state.db.signal_count()) {
         (Ok(signals), Ok(count)) => {
+            // ?raw=true returns the raw bullet-point guide
+            if params.raw.unwrap_or(false) {
+                let guide = build_taste_guide(&signals);
+                return Json(serde_json::json!({
+                    "text": guide,
+                    "signal_count": count,
+                }))
+                .into_response();
+            }
+
+            // Check for cached narrative that matches current signal count
+            if let Ok(Some((narrative, cached_count))) = state.db.get_cache("taste_narrative") {
+                if cached_count == count {
+                    return Json(serde_json::json!({
+                        "text": narrative,
+                        "signal_count": count,
+                    }))
+                    .into_response();
+                }
+            }
+
+            // Cache miss or stale — try to synthesize if LLM is available
+            if let Some(llm) = &state.llm {
+                match synthesize_taste_narrative(llm, &signals).await {
+                    Ok(narrative) => {
+                        state.db.set_cache("taste_narrative", &narrative, count).ok();
+                        return Json(serde_json::json!({
+                            "text": narrative,
+                            "signal_count": count,
+                        }))
+                        .into_response();
+                    }
+                    Err(e) => {
+                        tracing::warn!("failed to synthesize taste narrative: {e}");
+                    }
+                }
+            }
+
+            // Fallback to raw guide
             let guide = build_taste_guide(&signals);
             Json(serde_json::json!({
                 "text": guide,
@@ -609,6 +651,11 @@ async fn get_taste(State(state): State<SharedState>) -> impl IntoResponse {
         }
         _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
+}
+
+#[derive(Deserialize)]
+struct TasteRawQuery {
+    raw: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -806,6 +853,61 @@ async fn get_render(
 }
 
 // --- Helpers ---
+
+/// Synthesize raw taste signals into a narrative style guide via LLM.
+async fn synthesize_taste_narrative(
+    llm: &LlmClient,
+    signals: &[ww_workspace::TasteSignal],
+) -> std::result::Result<String, String> {
+    if signals.is_empty() {
+        return Ok("No taste signals yet. The guide emerges from crit.".to_string());
+    }
+
+    // Build raw material for the LLM
+    let mut raw = String::new();
+    for s in signals {
+        let kind = if s.reason.starts_with("[META-LESSON]") {
+            "LESSON"
+        } else if s.score > 0.0 {
+            "ACCEPTED"
+        } else {
+            "REJECTED"
+        };
+        raw.push_str(&format!(
+            "[{kind}] (score: {:.1}) {}\n",
+            s.score,
+            s.reason.trim_start_matches("[META-LESSON] ")
+        ));
+    }
+
+    let prompt = format!(
+        r#"You are writing a style guide for a crit-driven development system called Workwright.
+
+Below are {count} raw taste signals — judgments recorded from human crit of AI-generated work. Each is tagged ACCEPTED (positive), REJECTED (negative), or LESSON (distilled from repeated failure).
+
+**Raw signals:**
+{raw}
+
+**Your task:** Synthesize these into a narrative style guide. NOT a bullet list. Write it as connected prose that reads like an opinionated design document — the kind of thing a creative director would write for a team.
+
+Structure it with clear sections. Group related signals by theme (architecture, code organization, typography, UX patterns, etc. — whatever themes emerge naturally from the signals). Each section should:
+1. State the principle clearly
+2. Explain WHY it matters in this context (drawing from the signal reasoning)
+3. Give concrete examples of what's accepted vs. rejected
+
+Lessons from failure should be woven in prominently — they represent the hardest-won knowledge.
+
+Keep the voice direct, opinionated, and slightly sharp. This isn't corporate guidelines — it's earned taste. Write like someone who's been through the crit loop and knows what survives.
+
+Use markdown formatting. Start with a brief intro paragraph about what this guide is and how it was generated (from {count} crit signals, not written by hand). Then sections. No bullet-point dumps.
+
+Write the guide:"#,
+        count = signals.len(),
+        raw = raw,
+    );
+
+    llm.call(&prompt).await.map_err(|e| format!("{e}"))
+}
 
 fn build_taste_guide(signals: &[ww_workspace::TasteSignal]) -> String {
     if signals.is_empty() {

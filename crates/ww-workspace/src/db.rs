@@ -82,6 +82,13 @@ CREATE TABLE IF NOT EXISTS embeddings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_embeddings_kind ON embeddings(kind);
+
+CREATE TABLE IF NOT EXISTS cache (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated     REAL NOT NULL,
+    signal_count INTEGER NOT NULL DEFAULT 0
+);
 "#;
 
 /// Thread-safe database handle.
@@ -383,6 +390,33 @@ impl Db {
             |r| r.get(0),
         )?;
         Ok(count as usize)
+    }
+
+    // --- Cache ---
+
+    pub fn get_cache(&self, key: &str) -> Result<Option<(String, usize)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT value, signal_count FROM cache WHERE key = ?1"
+        )?;
+        let result = stmt.query_row(params![key], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+        });
+        match result {
+            Ok(r) => Ok(Some(r)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn set_cache(&self, key: &str, value: &str, signal_count: usize) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO cache (key, value, updated, signal_count) VALUES (?1, ?2, ?3, ?4) \
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated=excluded.updated, signal_count=excluded.signal_count",
+            params![key, value, now_secs(), signal_count as i64],
+        )?;
+        Ok(())
     }
 
     // --- Migration ---
