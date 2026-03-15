@@ -163,6 +163,14 @@ async fn post_task(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
     }
 
+    // Embed the task intent (non-blocking, best effort)
+    if let Some(ref llm) = state.llm {
+        let db = state.db.clone();
+        let llm = llm.clone();
+        let t = task.clone();
+        tokio::spawn(async move { embed_task(&db, &llm, &t).await; });
+    }
+
     // Spawn wright on dedicated thread with its OWN db connection.
     // WAL mode allows concurrent reads (server) while wright writes.
     if let Some(ref llm) = state.llm {
@@ -212,11 +220,8 @@ async fn run_wright(db: &Db, root: &PathBuf, llm: &LlmClient, task_id: &str) {
         files.push((path.clone(), content));
     }
 
-    // Read taste guide
-    let guide = match db.all_signals() {
-        Ok(signals) => build_taste_guide(&signals),
-        Err(_) => String::new(),
-    };
+    // Build taste guide — semantic retrieval if embeddings available, full dump as fallback
+    let guide = build_contextual_guide(db, llm, &task).await;
 
     // LLM call
     let prompt = build_wright_prompt(&task, &files, &guide);
@@ -309,6 +314,14 @@ async fn post_crit(
         tags: vec![],
     };
     state.db.record_taste(&signal).ok();
+
+    // Embed the taste signal (non-blocking)
+    if let Some(ref llm) = state.llm {
+        let db = state.db.clone();
+        let llm = llm.clone();
+        let sig = signal.clone();
+        tokio::spawn(async move { embed_taste_signal(&db, &llm, &sig).await; });
+    }
 
     // Update task
     let mut task = match state.db.get_task(&body.task_id) {
@@ -470,6 +483,84 @@ Your principle:"#
             db.record_taste(&signal).ok();
         }
         Err(e) => tracing::warn!("failed to distill lesson: {e}"),
+    }
+}
+
+async fn build_contextual_guide(
+    db: &Db,
+    llm: &LlmClient,
+    task: &ww_workspace::Task,
+) -> String {
+    let all_signals = db.all_signals().unwrap_or_default();
+    let embedded_count = db.embedding_count("taste_signal").unwrap_or(0);
+
+    // Always include meta-lessons (they're universal)
+    let lessons: Vec<&ww_workspace::TasteSignal> = all_signals
+        .iter()
+        .filter(|s| s.reason.starts_with("[META-LESSON]"))
+        .collect();
+
+    // If we have embeddings, do semantic retrieval for relevant signals
+    if embedded_count > 5 {
+        let query = format!("{} {}", task.intent, task.why);
+        if let Ok(query_vec) = llm.embed(&query).await {
+            if let Ok(similar) = db.search_similar("taste_signal", &query_vec, 8) {
+                let mut guide = String::new();
+                guide.push_str(&format!(
+                    "## Taste Guide (semantic — {} most relevant of {} signals)\n\n",
+                    similar.len(),
+                    all_signals.len()
+                ));
+
+                if !lessons.is_empty() {
+                    guide.push_str("**Lessons (always apply):**\n");
+                    for s in &lessons {
+                        guide.push_str(&format!(
+                            "- {}\n",
+                            s.reason.trim_start_matches("[META-LESSON] ")
+                        ));
+                    }
+                    guide.push('\n');
+                }
+
+                guide.push_str("**Relevant signals for this task:**\n");
+                for r in &similar {
+                    if !r.text.starts_with("[META-LESSON]") {
+                        guide.push_str(&format!("- {} (relevance: {:.0}%)\n", r.text, r.score * 100.0));
+                    }
+                }
+
+                return guide;
+            }
+        }
+    }
+
+    // Fallback: full taste guide
+    build_taste_guide(&all_signals)
+}
+
+/// Embed a taste signal and store it. Called after recording a new signal.
+async fn embed_taste_signal(db: &Db, llm: &LlmClient, signal: &ww_workspace::TasteSignal) {
+    let text = &signal.reason;
+    match llm.embed(text).await {
+        Ok(vec) => {
+            let id = format!("taste_{}", signal.timestamp as u64);
+            db.store_embedding(&id, "taste_signal", &signal.task_id, text, &vec).ok();
+            tracing::debug!("embedded taste signal");
+        }
+        Err(e) => tracing::debug!("embed failed (non-critical): {e}"),
+    }
+}
+
+/// Embed a task intent for similar-task lookup.
+async fn embed_task(db: &Db, llm: &LlmClient, task: &ww_workspace::Task) {
+    let text = format!("{}: {}", task.intent, task.why);
+    match llm.embed(&text).await {
+        Ok(vec) => {
+            db.store_embedding(&task.id, "task", &task.id, &text, &vec).ok();
+            tracing::debug!("embedded task {}", task.id);
+        }
+        Err(e) => tracing::debug!("task embed failed (non-critical): {e}"),
     }
 }
 

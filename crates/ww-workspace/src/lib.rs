@@ -13,7 +13,7 @@ pub mod task;
 pub mod taste;
 pub mod workspace;
 
-pub use db::{Db, User};
+pub use db::{Db, User, SimilarResult};
 pub use error::WorkspaceError;
 pub use task::{Task, TaskStatus, TaskStore};
 pub use taste::{TasteSignal, TasteStore};

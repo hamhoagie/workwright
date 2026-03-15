@@ -62,6 +62,22 @@ struct ApiError {
     message: Option<String>,
 }
 
+#[derive(Serialize)]
+struct EmbeddingRequest {
+    model: String,
+    input: String,
+}
+
+#[derive(Deserialize)]
+struct EmbeddingResponse {
+    data: Vec<EmbeddingData>,
+}
+
+#[derive(Deserialize)]
+struct EmbeddingData {
+    embedding: Vec<f32>,
+}
+
 impl LlmClient {
     pub fn new(api_key: &str, model: &str) -> Self {
         Self {
@@ -93,6 +109,52 @@ impl LlmClient {
 
     pub fn model(&self) -> &str {
         &self.model
+    }
+
+    /// Get embedding vector for text via OpenAI API.
+    /// Uses text-embedding-3-small (1536 dimensions).
+    pub async fn embed(&self, text: &str) -> Result<Vec<f32>, LlmError> {
+        let openai_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+        if openai_key.is_empty() {
+            return Err(LlmError::Api {
+                status: 0,
+                message: "OPENAI_API_KEY not set for embeddings".to_string(),
+            });
+        }
+
+        let body = EmbeddingRequest {
+            model: "text-embedding-3-small".to_string(),
+            input: text.to_string(),
+        };
+
+        let resp = self
+            .http
+            .post("https://api.openai.com/v1/embeddings")
+            .header("Authorization", format!("Bearer {openai_key}"))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| LlmError::Network(e.to_string()))?;
+
+        let status = resp.status().as_u16();
+        if status != 200 {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(LlmError::Api {
+                status,
+                message: text,
+            });
+        }
+
+        let body: EmbeddingResponse = resp
+            .json()
+            .await
+            .map_err(|e| LlmError::Malformed(e.to_string()))?;
+
+        body.data
+            .first()
+            .map(|d| d.embedding.clone())
+            .ok_or_else(|| LlmError::Malformed("no embedding data".to_string()))
     }
 
     pub async fn call(&self, prompt: &str) -> Result<String, LlmError> {

@@ -71,6 +71,17 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created);
 CREATE INDEX IF NOT EXISTS idx_users_token ON users(token);
 CREATE INDEX IF NOT EXISTS idx_taste_task ON taste_signals(task_id);
+
+CREATE TABLE IF NOT EXISTS embeddings (
+    id          TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL,
+    source_id   TEXT NOT NULL,
+    text        TEXT NOT NULL,
+    vector      BLOB NOT NULL,
+    created     REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_embeddings_kind ON embeddings(kind);
 "#;
 
 /// Thread-safe database handle.
@@ -313,6 +324,67 @@ impl Db {
         Ok(())
     }
 
+    // --- Embeddings ---
+
+    pub fn store_embedding(
+        &self,
+        id: &str,
+        kind: &str,
+        source_id: &str,
+        text: &str,
+        vector: &[f32],
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let blob: Vec<u8> = vector.iter().flat_map(|f| f.to_le_bytes()).collect();
+        conn.execute(
+            "INSERT OR REPLACE INTO embeddings (id, kind, source_id, text, vector, created) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, kind, source_id, text, blob, now_secs()],
+        )?;
+        Ok(())
+    }
+
+    pub fn search_similar(
+        &self,
+        kind: &str,
+        query_vec: &[f32],
+        limit: usize,
+    ) -> Result<Vec<SimilarResult>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, source_id, text, vector FROM embeddings WHERE kind = ?1",
+        )?;
+
+        let mut results: Vec<SimilarResult> = stmt
+            .query_map(params![kind], |row| {
+                let text: String = row.get(2)?;
+                let blob: Vec<u8> = row.get(3)?;
+                let vector = bytes_to_f32(&blob);
+                let score = cosine_similarity(query_vec, &vector);
+                Ok(SimilarResult {
+                    source_id: row.get(1)?,
+                    text,
+                    score,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(limit);
+        Ok(results)
+    }
+
+    pub fn embedding_count(&self, kind: &str) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM embeddings WHERE kind = ?1",
+            params![kind],
+            |r| r.get(0),
+        )?;
+        Ok(count as usize)
+    }
+
     // --- Migration ---
 
     /// Import existing JSONL data into SQLite.
@@ -399,6 +471,33 @@ impl User {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SimilarResult {
+    pub source_id: String,
+    pub text: String,
+    pub score: f32,
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return 0.0;
+    }
+    dot / (norm_a * norm_b)
+}
+
+fn bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect()
+}
+
 fn parse_status(s: &str) -> TaskStatus {
     match s {
         "pending" => TaskStatus::Pending,
@@ -414,4 +513,11 @@ fn parse_status(s: &str) -> TaskStatus {
 fn parse_json_vec(s: Option<String>) -> Vec<String> {
     s.and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
+}
+
+fn now_secs() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
 }
