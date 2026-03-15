@@ -214,6 +214,37 @@
             white-space: pre-wrap;
         }
 
+        #taste-search-box {
+            margin-bottom: 1.25rem;
+        }
+
+        #taste-query {
+            width: 100%;
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 0.85rem;
+            padding: 0.6rem 0.75rem;
+            background: var(--code-bg);
+            color: var(--fg);
+            border: 1px solid var(--rule);
+            outline: none;
+        }
+
+        #taste-query:focus {
+            border-color: var(--fg);
+            background: var(--bg);
+        }
+
+        .taste-result-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--code-bg);
+        }
+
+        .taste-result-score {
+            font-size: 0.75rem;
+            opacity: 0.5;
+            float: right;
+        }
+
         /* ---- FOOTER ---- */
 
         footer {
@@ -268,7 +299,11 @@
 
         <section>
             <h2>Taste Guide</h2>
+            <div id="taste-search-box">
+                <input type="text" id="taste-query" placeholder="Search taste memory — e.g. 'CSS patterns' or 'error handling'" />
+            </div>
             <div class="taste-guide" id="taste-guide">Loading...</div>
+            <div class="taste-guide" id="taste-results"></div>
         </section>
 
         <footer>
@@ -347,6 +382,42 @@
         const d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
+    }
+
+    let searchTimeout;
+    document.getElementById('taste-query').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const q = e.target.value.trim();
+        if (q.length < 3) {
+            document.getElementById('taste-results').innerHTML = '';
+            document.getElementById('taste-guide').style.display = 'block';
+            return;
+        }
+        searchTimeout = setTimeout(() => searchTaste(q), 400);
+    });
+
+    async function searchTaste(q) {
+        const results = document.getElementById('taste-results');
+        const guide = document.getElementById('taste-guide');
+        results.innerHTML = 'Searching...';
+        guide.style.display = 'none';
+
+        try {
+            const resp = await fetch(`${API}/taste/search?q=${encodeURIComponent(q)}`);
+            const data = await resp.json();
+
+            if (!data.results || !data.results.length) {
+                results.innerHTML = 'No matching signals.';
+                return;
+            }
+
+            results.innerHTML = `<strong>${data.results.length} relevant signals (of ${data.total_signals})</strong>\n\n` +
+                data.results.map(r =>
+                    `<div class="taste-result-item"><span class="taste-result-score">${Math.round(r.score * 100)}%</span>${esc(r.text)}</div>`
+                ).join('');
+        } catch (e) {
+            results.innerHTML = 'Search unavailable.';
+        }
     }
 
     loadFeed();

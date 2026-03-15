@@ -81,6 +81,7 @@ async fn main() {
         .route("/api/tasks", post(post_task))
         .route("/api/crit", post(post_crit))
         .route("/api/taste", get(get_taste))
+        .route("/api/taste/search", get(get_taste_search))
         .route("/api/users", get(get_users))
         .route("/api/me", get(get_me))
         .route("/api/register", post(post_register))
@@ -608,6 +609,51 @@ async fn get_taste(State(state): State<SharedState>) -> impl IntoResponse {
         }
         _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
+}
+
+#[derive(Deserialize)]
+struct TasteSearchQuery {
+    q: Option<String>,
+}
+
+async fn get_taste_search(
+    State(state): State<SharedState>,
+    axum::extract::Query(params): axum::extract::Query<TasteSearchQuery>,
+) -> impl IntoResponse {
+    let query = params.q.unwrap_or_default();
+    if query.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "q parameter required"}))).into_response();
+    }
+
+    let llm = match &state.llm {
+        Some(l) => l,
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "embeddings unavailable"}))).into_response(),
+    };
+
+    let query_vec = match llm.embed(&query).await {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let results = match state.db.search_similar("taste_signal", &query_vec, 8) {
+        Ok(r) => r,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let items: Vec<serde_json::Value> = results
+        .iter()
+        .map(|r| serde_json::json!({
+            "text": r.text,
+            "score": (r.score * 100.0).round() / 100.0,
+            "source_id": r.source_id,
+        }))
+        .collect();
+
+    Json(serde_json::json!({
+        "query": query,
+        "results": items,
+        "total_signals": state.db.signal_count().unwrap_or(0),
+    })).into_response()
 }
 
 async fn get_users(State(state): State<SharedState>) -> impl IntoResponse {
