@@ -221,3 +221,34 @@ footer a:hover { opacity: 0.7; }
     h1 { font-size: 2rem; }
     .feed-scope { display: none; }
 }
+/* ---- TASTE SEARCH ---- */
+#taste-search-box {
+    margin-bottom: 1.25rem;
+}
+
+#taste-query {
+    width: 100%;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.85rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--code-bg);
+    color: var(--fg);
+    border: 1px solid var(--rule);
+    outline: none;
+}
+
+#taste-query:focus {
+    border-color: var(--fg);
+    background: var(--bg);
+}
+
+.taste-result-item {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--code-bg);
+}
+
+.taste-result-score {
+    font-size: 0.75rem;
+    opacity: 0.5;
+    float: right;
+}
