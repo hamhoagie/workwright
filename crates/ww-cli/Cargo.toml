@@ -3,5 +3,12 @@ name = "ww-cli"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "ww"
+path = "src/main.rs"
+
 [dependencies]
-ww-workspace = { path = "../ww-workspace" }
+clap.workspace = true
+reqwest = { workspace = true, features = ["blocking", "json"] }
+serde.workspace = true
+serde_json.workspace = true

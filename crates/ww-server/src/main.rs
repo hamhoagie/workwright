@@ -5,6 +5,9 @@
 
 use std::sync::Arc;
 use std::path::PathBuf;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::Instant;
 
 use axum::{
     Router,
@@ -26,6 +29,56 @@ struct AppState {
     db: Db,
     workspace: Workspace,
     llm: Option<LlmClient>,
+    rate_limits: Mutex<HashMap<String, RateBucket>>,
+}
+
+/// Simple per-IP token bucket. Refills at `rate` tokens/sec up to `burst`.
+struct RateBucket {
+    tokens: f64,
+    last: Instant,
+    rate: f64,
+    burst: f64,
+}
+
+impl RateBucket {
+    fn new(rate: f64, burst: f64) -> Self {
+        Self { tokens: burst, last: Instant::now(), rate, burst }
+    }
+
+    fn check(&mut self) -> bool {
+        let now = Instant::now();
+        let elapsed = now.duration_since(self.last).as_secs_f64();
+        self.tokens = (self.tokens + elapsed * self.rate).min(self.burst);
+        self.last = now;
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Rate limit check keyed by (endpoint, ip). Returns true if allowed.
+fn rate_check(state: &AppState, key: &str, rate: f64, burst: f64) -> bool {
+    let mut map = state.rate_limits.lock().unwrap();
+    // Cap the map size — evict everything if it grows unbounded (simple DoS guard)
+    if map.len() > 10_000 {
+        map.clear();
+    }
+    let bucket = map
+        .entry(key.to_string())
+        .or_insert_with(|| RateBucket::new(rate, burst));
+    bucket.check()
+}
+
+fn client_ip(headers: &HeaderMap) -> String {
+    headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 type SharedState = Arc<AppState>;
@@ -74,6 +127,7 @@ async fn main() {
         workspace: Workspace::new(&root),
         llm,
         root: root.clone(),
+        rate_limits: Mutex::new(HashMap::new()),
     });
 
     let app = Router::new()
@@ -88,6 +142,12 @@ async fn main() {
         .route("/api/preview/{change_id}", get(get_preview))
         .route("/api/diff/{task_id}", get(get_diff))
         .route("/api/render/{task_id}", get(get_render))
+        // Clean URLs for pages (nginx does this in prod via try_files)
+        .route("/brief", get(page_brief))
+        .route("/crit", get(page_crit))
+        .route("/review", get(page_review))
+        .route("/register", get(page_register))
+        .route("/about", get(page_about))
         .fallback_service(ServeDir::new(&site_dir))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -98,6 +158,26 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
+
+// --- Pages (clean URLs; dev parity with nginx try_files) ---
+
+macro_rules! static_page {
+    ($name:ident, $file:expr) => {
+        async fn $name(State(state): State<SharedState>) -> impl IntoResponse {
+            let path = state.root.join("site").join($file);
+            match std::fs::read_to_string(path) {
+                Ok(html) => axum::response::Html(html).into_response(),
+                Err(_) => StatusCode::NOT_FOUND.into_response(),
+            }
+        }
+    };
+}
+
+static_page!(page_brief, "brief.html");
+static_page!(page_crit, "crit.html");
+static_page!(page_review, "review.html");
+static_page!(page_register, "register.html");
+static_page!(page_about, "about.html");
 
 // --- Auth ---
 
@@ -135,6 +215,15 @@ async fn post_task(
         Some(u) => u,
         None => return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "unauthorized"}))).into_response(),
     };
+
+    let ip = client_ip(&headers);
+    if !rate_check(&state, &format!("task:{ip}"), 20.0 / 3600.0, 20.0) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({"error": "rate limited — try again later"})),
+        )
+            .into_response();
+    }
 
     let scope = body.scope.as_deref().unwrap_or("site/index.html");
     let file_path = scope.split(':').next().unwrap_or(scope);
@@ -302,6 +391,15 @@ async fn post_crit(
         Some(_) => return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "only admins can crit"}))).into_response(),
         None => return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "unauthorized"}))).into_response(),
     };
+
+    let ip = client_ip(&headers);
+    if !rate_check(&state, &format!("crit:{ip}"), 30.0 / 3600.0, 30.0) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({"error": "rate limited — try again later"})),
+        )
+            .into_response();
+    }
 
     let score = body.score.clamp(-1.0, 1.0);
 
@@ -748,8 +846,17 @@ struct RegisterReq {
 
 async fn post_register(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     Json(body): Json<RegisterReq>,
 ) -> impl IntoResponse {
+    let ip = client_ip(&headers);
+    if !rate_check(&state, &format!("register:{ip}"), 5.0 / 3600.0, 5.0) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({"error": "rate limited — try again later"})),
+        )
+            .into_response();
+    }
     let user = User {
         id: uuid::Uuid::new_v4().to_string()[..8].to_string(),
         email: body.email,
