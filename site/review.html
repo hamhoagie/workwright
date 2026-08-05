@@ -10,158 +10,20 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
-    <style>
-        .queue-empty {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.9rem;
-            color: var(--secondary);
-            padding: 2rem 0;
-        }
+    <link rel="stylesheet" href="/review.css">
+</head>
+<body>
+    <div class="container">
 
-        .queue-item {
-            border: 2px solid var(--rule);
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .queue-item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 1rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .task-intent {
-            font-weight: 600;
-            font-size: 1rem;
-            flex: 1;
-        }
-
-        .task-scope {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.75rem;
-            opacity: 0.5;
-            white-space: nowrap;
-        }
-
-        .task-why {
-            font-size: 0.9rem;
-            color: var(--secondary);
-            margin-bottom: 1rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--rule);
-        }
-
-        .task-meta {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.75rem;
-            color: var(--secondary);
-            margin-bottom: 1rem;
-        }
-
-        .defense-label {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.8rem;
-            font-weight: 500;
-            margin-bottom: 0.35rem;
-        }
-
-        .defense-text {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.85rem;
-            line-height: 1.6;
-            padding: 1rem;
-            background: var(--code-bg);
-            margin-bottom: 1rem;
-            white-space: pre-wrap;
-        }
-
-        .preview-toggle {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.8rem;
-            background: none;
-            border: 1px solid var(--rule);
-            color: var(--fg);
-            padding: 0.35rem 0.75rem;
-            cursor: pointer;
-            margin-bottom: 1rem;
-        }
-
-        .preview-toggle:hover { background: var(--input-bg); }
-
-        .code-view-path {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.75rem;
-            color: var(--secondary);
-            margin-bottom: 0.5rem;
-        }
-
-        .code-content {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.8rem;
-            line-height: 1.5;
-            padding: 1rem;
-            background: var(--code-bg);
-            overflow-x: auto;
-            white-space: pre;
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid var(--rule);
-        }
-
-        .diff-add {
-            color: var(--diff-add-fg, #1a7a1a);
-            background: var(--diff-add-bg, rgba(26,122,26,0.08));
-            display: inline-block;
-            width: 100%;
-        }
-
-        .diff-del {
-            color: var(--diff-del-fg, #7a1a1a);
-            background: var(--diff-del-bg, rgba(122,26,26,0.08));
-            display: inline-block;
-            width: 100%;
-        }
-
-        .diff-ctx { color: var(--fg); opacity: 0.6; }
-        .diff-sep { color: var(--fg); opacity: 0.3; }
-
-        .cta-box {
-            border: 2px solid var(--rule);
-            padding: 1.5rem;
-            text-align: center;
-            margin-top: 2rem;
-        }
-
-        .cta-box p {
-            margin-bottom: 1rem;
-        }
-
-        .cta-link {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.85rem;
-            color: var(--fg);
-            text-decoration: none;
-            border-bottom: 2px solid var(--fg);
-            padding-bottom: 0.1rem;
-        }
-
-        .attempt-badge {
-            font-family: "IBM Plex Mono", monospace;
-            font-size: 0.7rem;
-            padding: 0.15rem 0.5rem;
-            border: 1px solid var(--reject);
-            color: var(--reject);
-            margin-left: 0.5rem;
-        }
-
-        @media (max-width: 600px) {
-            .container { padding: 2rem 1.25rem; }
-            h1 { font-size: 1.75rem; }
-            .queue-item { padding: 1rem; }
-        }
-    </style>
+        <nav>
+            <a href="/">Feed</a>
+            <a href="/brief">Brief</a>
+            <a href="/crit">Crit</a>
+            <a href="/review" class="nav-active">Review</a>
+            <a href="/register">Register</a>
+            <a href="/about">About</a>
+            <a href="https://github.com/hamhoagie/workwright">Source</a>
+        </nav>
 </head>
 <body>
     <div class="container">
